@@ -4,7 +4,8 @@ import warnings
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
-class DataMeshUtilTests(unittest.TestCase):
-    def test_data_mesh_iam_role(self):
+
+class DataMeshAdminAccountTests(unittest.TestCase):
+    def test_setup_data_mesh_account(self):
         mgr = dmu.DataMeshManager()
         mgr.initialize_mesh_account()

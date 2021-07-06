@@ -55,9 +55,7 @@
             ],
             "Resource": [
                 "arn:aws:glue::{{data_mesh_account_id}}:*/*",
-                "arn:aws:lakeformation::{{data_mesh_account_id}}:*/*",
-                "arn:aws:glue::{{producer_account_id}}:*/*",
-                "arn:aws:lakeformation::{{producer_account_id}}:*/*"
+                "arn:aws:lakeformation::{{data_mesh_account_id}}:*/*"
             ]
         }
     ]
