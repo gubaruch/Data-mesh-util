@@ -226,37 +226,48 @@ class DataMeshManager:
         s3_client = boto3.client('s3')
         get_bucket_policy_response = None
         try:
-            get_bucket_policy_response = s3_client.get_bucket_policy(Bucket=s3_bucket, ExpectedBucketOwner=self._data_producer_account_id)
+            get_bucket_policy_response = s3_client.get_bucket_policy(Bucket=s3_bucket,
+                                                                     ExpectedBucketOwner=self._data_producer_account_id)
         except s3_client.exceptions.from_code('NoSuchBucketPolicy'):
             pass
 
         # generate a new statement for the target bucket policy
-        conf = {"data_mesh_role_arn": data_mesh_producer_role_arn, "bucket": s3_bucket}
+        statement_sid = "ReadOnly-%s-%s" % (s3_bucket, data_mesh_producer_role_arn)
+        conf = {"data_mesh_role_arn": data_mesh_producer_role_arn, "bucket": s3_bucket, "sid": statement_sid}
         statement = json.loads(self._generate_policy(template_file="producer_bucket_policy.pystache", config=conf))
 
-        bucket_policy = None
         if get_bucket_policy_response is None or get_bucket_policy_response.get('Policy') is None:
             bucket_policy = {
                 "Id": "Policy%s" % shortuuid.uuid(),
-                "Version":  "2012-10-17",
+                "Version": "2012-10-17",
                 "Statement": [
                     statement
                 ]
             }
+
+            s3_client.put_bucket_policy(
+                Bucket=s3_bucket,
+                ConfirmRemoveSelfBucketAccess=False,
+                Policy=json.dumps(bucket_policy),
+                ExpectedBucketOwner=self._data_producer_account_id
+            )
         else:
-            bucket_policy = get_bucket_policy_response.get('Policy')
+            bucket_policy = json.loads(get_bucket_policy_response.get('Policy'))
+            sid_exists = False
+            for s in bucket_policy.get('Statement'):
+                if s.get('Sid') == statement_sid:
+                    sid_exists = True
 
-            # add a statement that allows the data mesh admin producer read-only access
-            bucket_policy.get('Statement').append(statement)
+            if sid_exists is False:
+                # add a statement that allows the data mesh admin producer read-only access
+                bucket_policy.get('Statement').append(statement)
 
-        print(bucket_policy)
-
-        s3_client.put_bucket_policy(
-            Bucket=s3_bucket,
-            ConfirmRemoveSelfBucketAccess=False,
-            Policy=json.dumps(bucket_policy),
-            ExpectedBucketOwner=self._data_producer_account_id
-        )
+                s3_client.put_bucket_policy(
+                    Bucket=s3_bucket,
+                    ConfirmRemoveSelfBucketAccess=False,
+                    Policy=json.dumps(bucket_policy),
+                    ExpectedBucketOwner=self._data_producer_account_id
+                )
 
     def initialize_consumer_account(self):
         pass

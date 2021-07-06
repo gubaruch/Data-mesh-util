@@ -1,5 +1,5 @@
 {
-  "Sid": "Stmt1625571326079",
+  "Sid": "{{sid}}",
   "Action": [
     "s3:GetBucketLocation",
     "s3:GetObject",
