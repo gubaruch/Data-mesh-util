@@ -1,0 +1,55 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "glue:SearchTables",
+                "glue:BatchCreatePartition",
+                "glue:ListSchemaVersions",
+                "lakeformation:UpdateResource",
+                "glue:GetTableVersions",
+                "glue:GetPartitions",
+                "glue:UpdateTable",
+                "lakeformation:RegisterResource",
+                "lakeformation:ListPermissions",
+                "glue:GetSchema",
+                "glue:CreateJob",
+                "glue:ImportCatalogToGlue",
+                "glue:GetTableVersion",
+                "lakeformation:GrantPermissions",
+                "glue:ListSchemas",
+                "glue:CreatePartition",
+                "glue:PutResourcePolicy",
+                "glue:UpdatePartition",
+                "glue:TagResource",
+                "glue:GetSchemaByDefinition",
+                "glue:RegisterSchemaVersion",
+                "glue:UpdateDatabase",
+                "glue:CreateTable",
+                "glue:GetTables",
+                "glue:UpdateSchema",
+                "glue:GetDatabases",
+                "glue:GetTags",
+                "glue:GetTable",
+                "glue:GetDatabase",
+                "glue:PutSchemaVersionMetadata",
+                "lakeformation:DescribeResource",
+                "lakeformation:ListResources",
+                "glue:GetPartition",
+                "glue:GetSchemaVersion",
+                "glue:QuerySchemaVersionMetadata",
+                "glue:CreateDatabase",
+                "glue:CreateSchema",
+                "glue:ListRegistries"
+            ],
+            "Resource": [
+                "arn:aws:glue::{{data_mesh_account_id}}:*/*",
+                "arn:aws:lakeformation::{{data_mesh_account_id}}:*/*",
+                "arn:aws:glue::{{consumer_account_id}}:*/*",
+                "arn:aws:lakeformation::{{consumer_account_id}}:*/*"
+            ]
+        }
+    ]
+}

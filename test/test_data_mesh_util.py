@@ -1,21 +1,10 @@
-import pytest
+import unittest
+from data_mesh_util import DataMeshManager as dmu
+import warnings
 
+warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
-@pytest.mark.xfail
-def test_that_you_wrote_tests():
-    from textwrap import dedent
-
-    assertion_string = dedent(
-        """\
-    No, you have not written tests.
-
-    However, unless a test is run, the pytest execution will fail
-    due to no tests or missing coverage. So, write a real test and
-    then remove this!
-    """
-    )
-    assert False, assertion_string
-
-
-def test_data_mesh_util_importable():
-    import data_mesh_util  # noqa: F401
+class DataMeshUtilTests(unittest.TestCase):
+    def test_data_mesh_iam_role(self):
+        mgr = dmu.DataMeshManager()
+        mgr.initialize_mesh_account()
