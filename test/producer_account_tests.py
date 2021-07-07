@@ -1,12 +1,12 @@
 import unittest
-from data_mesh_util import DataMeshAdmin as dmu
+from data_mesh_util import DataMeshProducer as dmp
 import warnings
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
 
 class DataMeshProducerAccountTests(unittest.TestCase):
-    mgr = dmu.DataMeshManager()
+    mgr = dmp.DataMeshProducer()
 
     def test_producer_iam_role(self):
         self.mgr.initialize_producer_account(s3_bucket="org-1-data/tpcds")

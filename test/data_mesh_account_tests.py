@@ -7,5 +7,5 @@ warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWa
 
 class DataMeshAdminAccountTests(unittest.TestCase):
     def test_setup_data_mesh_account(self):
-        mgr = dmu.DataMeshManager()
+        mgr = dmu.DataMeshAdmin()
         mgr.initialize_mesh_account()

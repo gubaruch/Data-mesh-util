@@ -4,6 +4,14 @@ import os
 import pystache
 
 
+def validate_correct_account(iam_client, role_must_exist: str):
+    try:
+        iam_client.get_role(RoleName=role_must_exist)
+        return True
+    except iam_client.exceptions.NoSuchEntityException:
+        return False
+
+
 def generate_policy(template_file: str, config: dict):
     with open("%s/%s" % (os.path.join(os.path.dirname(__file__), "../resource"), template_file)) as t:
         template = t.read()
