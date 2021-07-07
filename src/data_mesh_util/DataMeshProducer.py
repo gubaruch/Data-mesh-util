@@ -9,7 +9,6 @@ import shortuuid
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
 
-
 class DataMeshProducer:
     _data_mesh_account_id = None
     _data_producer_account_id = None
@@ -23,10 +22,6 @@ class DataMeshProducer:
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
 
-        # validate that we are being run within the correct account
-        if utils.validate_correct_account(self._iam_client, DATA_MESH_PRODUCER_ROLENAME) is False:
-            raise Exception("Function should be run in the Data Domain Producer Account")
-
     def initialize_producer_account(self, s3_bucket: str):
         '''
         Sets up an AWS Account to act as a Data Provider into the central Data Mesh Account. This method should be invoked
@@ -36,7 +31,7 @@ class DataMeshProducer:
         '''
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
 
-        return utils.create_role_and_attach_policy(
+        return utils.configure_iam(
             iam_client=self._iam_client,
             policy_name=PRODUCER_S3_POLICY_NAME,
             policy_desc='IAM Policy enabling Accounts to get and put restricted S3 Bucket Policies',
@@ -54,6 +49,10 @@ class DataMeshProducer:
         :return:
         '''
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
+
+        # validate that we are being run within the correct account
+        if utils.validate_correct_account(self._iam_client, DATA_MESH_PRODUCER_ROLENAME) is False:
+            raise Exception("Function should be run in the Data Domain Producer Account")
 
         # get the producer policy
         arn = "arn:aws:iam::%s:policy%s%s" % (
@@ -76,6 +75,10 @@ class DataMeshProducer:
 
     def grant_data_mesh_account_to_s3_bucket(self, s3_bucket: str, data_mesh_producer_role_arn: str):
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
+
+        # validate that we are being run within the correct account
+        if utils.validate_correct_account(self._iam_client, DATA_MESH_PRODUCER_ROLENAME) is False:
+            raise Exception("Function should be run in the Data Domain Producer Account")
 
         s3_client = boto3.client('s3')
         get_bucket_policy_response = None

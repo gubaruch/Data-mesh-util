@@ -40,7 +40,7 @@ class DataMeshAdmin:
     def _create_data_mesh_manager_role(self):
         self._validate_config(self._config)
 
-        self._data_mesh_manager_role_arn = utils.create_role_and_attach_policy(
+        self._data_mesh_manager_role_arn = utils.configure_iam(
             iam_client=self._iam_client,
             policy_name='DataMeshManagerBootstrapPolicy',
             policy_desc='Initial IAM Role enabling the Data Mesh Manager Policy to create future Resource Policies',
@@ -53,7 +53,7 @@ class DataMeshAdmin:
     def _create_producer_role(self):
         self._validate_config(self._config)
 
-        return utils.create_role_and_attach_policy(
+        return utils.configure_iam(
             iam_client=self._iam_client,
             policy_name='DataMeshProducerPolicy',
             policy_desc='IAM Role enabling Accounts to become Data Producers',
@@ -66,7 +66,7 @@ class DataMeshAdmin:
     def _create_consumer_role(self):
         self._validate_config(self._config)
 
-        return utils.create_role_and_attach_policy(
+        return utils.configure_iam(
             iam_client=self._iam_client,
             policy_name='DataMeshConsumerPolicy',
             policy_desc='IAM Role enabling Accounts to become Data Consumers',
