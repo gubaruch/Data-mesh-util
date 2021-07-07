@@ -94,3 +94,22 @@ class DataMeshAdmin:
         consumer_role = self._create_consumer_role()
 
         return (self._data_mesh_manager_role_arn, producer_role, consumer_role)
+
+    def trust_account(self, account_id: str, role_name: str):
+        self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
+
+        # validate that the account is suitable for configuration due to it having the DataMeshManager role installed
+        utils.validate_correct_account(self._iam_client, role_name)
+
+        # update the  trust policy to include the provided account ID
+        response = self._iam_client.get_role(RoleName=role_name)
+
+        policy_doc = response.get('Role').get('AssumeRolePolicyDocument')
+
+        # add the account to the trust relationship
+        trusted_entities = policy_doc.get('Statement')[0].get('Principal').get('AWS')
+        if account_id not in trusted_entities:
+            trusted_entities.append(account_id)
+            policy_doc.get('Statement')[0].get('Principal')['AWS'] = trusted_entities
+
+        self._iam_client.update_assume_role_policy(RoleName=role_name, PolicyDocument=json.dumps(policy_doc))

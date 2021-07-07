@@ -1,11 +1,20 @@
 import unittest
 from data_mesh_util import DataMeshAdmin as dmu
 import warnings
+from data_mesh_util.lib.constants import *
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
 
 class DataMeshAdminAccountTests(unittest.TestCase):
+    _mgr = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls._mgr = dmu.DataMeshAdmin()
+
     def test_setup_data_mesh_account(self):
-        mgr = dmu.DataMeshAdmin()
-        mgr.initialize_mesh_account()
+        self._mgr.initialize_mesh_account()
+
+    def test_grant_producer_access(self):
+        self._mgr.trust_account(account_id='600214582022', role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)

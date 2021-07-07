@@ -9,6 +9,7 @@ import shortuuid
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
 
+
 class DataMeshProducer:
     _data_mesh_account_id = None
     _data_producer_account_id = None
@@ -22,7 +23,7 @@ class DataMeshProducer:
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
 
-    def initialize_producer_account(self, s3_bucket: str):
+    def initialize_producer_account(self, s3_bucket: str, data_mesh_producer_iam_role_arn: str):
         '''
         Sets up an AWS Account to act as a Data Provider into the central Data Mesh Account. This method should be invoked
         by an Administrator of the Producer Account. Creates IAM Role & Policy to get and put restricted S3 Bucket Policies.
@@ -31,7 +32,8 @@ class DataMeshProducer:
         '''
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
 
-        return utils.configure_iam(
+        # setup the producer IAM role
+        utils.configure_iam(
             iam_client=self._iam_client,
             policy_name=PRODUCER_S3_POLICY_NAME,
             policy_desc='IAM Policy enabling Accounts to get and put restricted S3 Bucket Policies',
@@ -40,6 +42,18 @@ class DataMeshProducer:
             role_desc='Role to be used to update S3 Bucket Policies for crawling by Data Mesh Account',
             config={"bucket": s3_bucket},
             account_id=self._data_producer_account_id)
+
+        # now create the iam policy allowing the producer group to assume the data mesh producer role
+        policy_name = "AssumeDataMeshAdminProducer"
+        policy_arn = utils.create_assume_role_policy(
+            iam_client=self._iam_client,
+            account_id=self._data_producer_account_id,
+            policy_name=policy_name,
+            role_arn=data_mesh_producer_iam_role_arn
+        )
+
+        # now let the group assume the cross account role
+        self._iam_client.attach_group_policy(GroupName=("%sGroup" % DATA_MESH_PRODUCER_ROLENAME), PolicyArn=policy_arn)
 
     def enable_future_bucket_sharing(self, s3_bucket: str):
         '''

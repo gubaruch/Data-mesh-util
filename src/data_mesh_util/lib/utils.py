@@ -118,21 +118,27 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         role_arn = iam_client.get_role(RoleName=role_name).get(
             'Role').get('Arn')
 
-    # create a policy that lets someone assume this new role
-    policy_arn = None
-    try:
-        response = iam_client.create_policy(
-            PolicyName=("Assume%s" % role_name),
-            Path=DATA_MESH_IAM_PATH,
-            PolicyDocument=json.dumps(get_assume_role_doc(resource=role_arn)),
-            Description=("Policy allowing the grantee the ability to assume the %s Role" % role_name),
-            Tags=DEFAULT_TAGS
-        )
-        policy_arn = response.get('Policy').get('Arn')
-    except iam_client.exceptions.EntityAlreadyExistsException:
-        policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, ("Assume%s" % role_name))
+    create_assume_role_policy(iam_client, account_id, ("Assume%s" % role_name), role_arn)
 
     # now let the group assume the role
     iam_client.attach_group_policy(GroupName=("%sGroup" % role_name), PolicyArn=policy_arn)
 
     return role_arn
+
+
+def create_assume_role_policy(iam_client, account_id, policy_name, role_arn):
+    # create a policy that lets someone assume this new role
+    policy_arn = None
+    try:
+        response = iam_client.create_policy(
+            PolicyName=policy_name,
+            Path=DATA_MESH_IAM_PATH,
+            PolicyDocument=json.dumps(get_assume_role_doc(resource=role_arn)),
+            Description=("Policy allowing the grantee the ability to assume Role %s" % role_arn),
+            Tags=DEFAULT_TAGS
+        )
+        policy_arn = response.get('Policy').get('Arn')
+    except iam_client.exceptions.EntityAlreadyExistsException:
+        policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
+
+    return policy_arn
