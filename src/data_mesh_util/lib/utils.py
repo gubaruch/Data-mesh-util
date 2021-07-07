@@ -22,7 +22,7 @@ def generate_policy(template_file: str, config: dict):
     return rendered
 
 
-def get_assume_role_doc(principal: str = None, resource: str = None):
+def get_assume_role_doc(principals: list = None, resource: str = None):
     document = {
         "Version": "2012-10-17",
         "Statement": [
@@ -33,8 +33,8 @@ def get_assume_role_doc(principal: str = None, resource: str = None):
         ]
     }
 
-    if principal is not None:
-        document.get('Statement')[0]['Principal'] = {"AWS": principal}
+    if principals is not None:
+        document.get('Statement')[0]['Principal'] = {"AWS": principals}
 
     if resource is not None:
         document.get('Statement')[0]['Resource'] = resource
@@ -97,12 +97,12 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
 
     role_arn = None
     try:
-        # now create the IAM Role
+        # now create the IAM Role with a trust policy to the indicated principal and the root user
         role_response = iam_client.create_role(
             Path=DATA_MESH_IAM_PATH,
             RoleName=role_name,
             AssumeRolePolicyDocument=json.dumps(
-                get_assume_role_doc(principal=user_arn)),
+                get_assume_role_doc(principals=[user_arn, ("arn:aws:iam::%s:root" % account_id)])),
             Description=role_desc,
             Tags=DEFAULT_TAGS
         )
