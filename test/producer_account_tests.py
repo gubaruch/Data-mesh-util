@@ -1,5 +1,5 @@
 import unittest
-from data_mesh_util import DataMeshManager as dmu
+from data_mesh_util import DataMeshAdmin as dmu
 import warnings
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
