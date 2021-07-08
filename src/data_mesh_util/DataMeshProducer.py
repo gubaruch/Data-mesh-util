@@ -44,7 +44,7 @@ class DataMeshProducer:
             iam_client=self._iam_client,
             policy_name=PRODUCER_S3_POLICY_NAME,
             policy_desc='IAM Policy enabling Accounts to get and put restricted S3 Bucket Policies',
-            policy_template="producer_update_bucket_policy.pystache",
+            policy_template="producer_access_catalog.pystache",
             role_name=DATA_MESH_PRODUCER_ROLENAME,
             role_desc='Role to be used to update S3 Bucket Policies for crawling by Data Mesh Account',
             config={"bucket": s3_bucket},
@@ -62,7 +62,7 @@ class DataMeshProducer:
         # now let the group assume the cross account role
         self._iam_client.attach_group_policy(GroupName=("%sGroup" % DATA_MESH_PRODUCER_ROLENAME), PolicyArn=policy_arn)
 
-    def enable_future_bucket_sharing(self, s3_bucket: str):
+    def enable_future_sharing(self, s3_bucket: str):
         '''
         Adds a Bucket and Prefix to the policy document for the DataProducer Role, which will enable the Role to potentially
         share the Bucket with the Data Mesh Account in future. This method does not enable access to the Bucket.
@@ -94,7 +94,7 @@ class DataMeshProducer:
             self._iam_client.create_policy_version(PolicyArn=arn, PolicyDocument=json.dumps(policy_doc),
                                                    SetAsDefault=True)
 
-    def grant_data_mesh_account_to_s3_bucket(self, s3_bucket: str, data_mesh_producer_role_arn: str):
+    def grant_datamesh_access_to_s3(self, s3_bucket: str, data_mesh_producer_role_arn: str):
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
 
         # validate that we are being run within the correct account
@@ -147,19 +147,93 @@ class DataMeshProducer:
                     ExpectedBucketOwner=self._data_producer_account_id
                 )
 
-    def create_data_product(self, data_mesh_admin_producer_role_arn: str, database_name: str, table_name: str = None):
+    def _cleanup_table_def(self, table_def: dict):
+        t = table_def.copy()
+
+        def rm(prop):
+            del t[prop]
+
+        rm('DatabaseName')
+        rm('CreateTime')
+        rm('UpdateTime')
+        rm('CreatedBy')
+        rm('IsRegisteredWithLakeFormation')
+        rm('CatalogId')
+
+        return t
+
+    def create_data_product(self, data_mesh_producer_role_arn: str, source_database_name: str,
+                            target_database_name: str, table_name_regex: str = None):
         # assume the data mesh admin producer role. if this fails, then the requesting identity is wrong
         current_account = self._sts_client.get_caller_identity()
-        session_name = "%s-%s-%s" % current_account.get('UserId'), current_account.get(
-            'Account'), datetime.datetime.now().strftime("%Y-%m-%d")
-        response = self._sts_client.assume_role(RoleArn=data_mesh_admin_producer_role_arn, RoleSessionName=session_name)
+        session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
+            'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
+        sts_session = self._sts_client.assume_role(RoleArn=data_mesh_producer_role_arn,
+                                                   RoleSessionName=session_name)
 
         # create a glue client for the current account and with the new credentials in the data mesh account
         current_glue_client = boto3.client('glue', region_name=self._current_region)
         data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
-                                                      credentials=response.get('Credentials'))
+                                                      credentials=sts_session.get('Credentials'))
 
         # get the tables which are included in the set provided through args
-        response = current_glue_client.get_tables(
-            CatalogId=current_account
-        )
+        get_tables_args = {
+            'CatalogId': current_account.get('Account'),
+            'DatabaseName': source_database_name
+        }
+
+        # add the table filter as a regex matching anything including the provided table
+        if table_name_regex is not None:
+            get_tables_args['Expression'] = table_name_regex
+
+        finished_reading = False
+        last_token = None
+        all_tables = []
+        while finished_reading is False:
+            if last_token is not None:
+                get_tables_args['NextToken'] = last_token
+
+            get_table_response = current_glue_client.get_tables(
+                **get_tables_args
+            )
+
+            if 'NextToken' in get_table_response:
+                last_token = get_table_response.get('NextToken')
+            else:
+                finished_reading = True
+
+            # add the tables returned from this instance of the request
+            if not get_table_response.get('TableList'):
+                raise Exception("Unable to find any Tables matching %s in Database %s" % (table_name_regex,
+                                                                                          source_database_name))
+            else:
+                all_tables.extend(get_table_response.get('TableList'))
+
+        # determine if the target database exists in the mesh account
+        database_exists = None
+        try:
+            database_exists = data_mesh_glue_client.get_database(
+                Name=target_database_name
+            )
+        except data_mesh_glue_client.exceptions.from_code('EntityNotFoundException'):
+            pass
+
+        if database_exists is None or 'Database' not in database_exists:
+            # create the database
+            data_mesh_glue_client.create_database(
+                DatabaseInput={
+                    "Name": target_database_name,
+                    "Description": "Database to contain objects from Source Database %s.%s" % (
+                        current_account.get('Account'), source_database_name),
+                }
+            )
+
+        for table in all_tables:
+            # cleanup the TableInfo object to be usable as a TableInput
+            t = self._cleanup_table_def(table)
+
+            # create the glue catalog entry
+            data_mesh_glue_client.create_table(
+                DatabaseName=target_database_name,
+                TableInput=t
+            )

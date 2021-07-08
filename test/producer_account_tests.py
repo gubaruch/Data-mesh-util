@@ -4,6 +4,8 @@ import warnings
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
+PRODUCER_ROLE_ARN = "arn:aws:iam::887210671223:role/AwsDataMesh/DataMeshAdminProducer"
+
 
 class DataMeshProducerAccountTests(unittest.TestCase):
     mgr = dmp.DataMeshProducer()
@@ -11,14 +13,22 @@ class DataMeshProducerAccountTests(unittest.TestCase):
     def test_setup_producer_iam_role(self):
         self.mgr.initialize_producer_account(
             s3_bucket="org-1-data/tpcds",
-            data_mesh_producer_role_arn="arn:aws:iam::887210671223:role/AwsDataMesh/DataMeshAdminProducer"
+            data_mesh_producer_role_arn=PRODUCER_ROLE_ARN
         )
 
-    def test_enable_future_bucket_access(self):
-        self.mgr.enable_future_bucket_sharing("blah/blah")
+    def test_enable_future_sharing(self):
+        self.mgr.enable_future_sharing("blah/blah")
 
     def test_grant_bucket_access(self):
-        self.mgr.grant_data_mesh_account_to_s3_bucket(
+        self.mgr.grant_datamesh_access_to_s3(
             s3_bucket="org-1-data",
-            data_mesh_producer_role_arn="arn:aws:iam::887210671223:role/AwsDataMesh/DataMeshAdminProducer"
+            data_mesh_producer_role_arn=PRODUCER_ROLE_ARN
+        )
+
+    def test_create_data_product(self):
+        self.mgr.create_data_product(
+            data_mesh_producer_role_arn=PRODUCER_ROLE_ARN,
+            source_database_name='tpcds',
+            target_database_name='tpcds-600214582022',
+            table_name_regex='customer'
         )

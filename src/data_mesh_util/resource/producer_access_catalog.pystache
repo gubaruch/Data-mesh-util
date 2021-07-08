@@ -9,6 +9,17 @@
                 "s3:GetBucketPolicy"
             ],
             "Resource": ["arn:aws:s3:::{{bucket}}"]
+        },
+        {
+            "Sid": "VisualEditor1",
+            "Effect": "Allow",
+            "Action": [
+                "glue:GetTables",
+                "glue:GetTable",
+                "glue:GetDatabases",
+                "glue:GetDatabase"
+            ],
+            "Resource": "*"
         }
     ]
 }
