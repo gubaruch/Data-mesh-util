@@ -51,11 +51,17 @@
                 "glue:StartCrawlerSchedule",
                 "glue:CreateSchema",
                 "glue:ListRegistries",
-                "glue:ListCrawlers"
+                "glue:ListCrawlers",
+                "s3:GetBucketLocation",
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:ListBucket",
+                "s3:ListBucketVersions"
             ],
             "Resource": [
                 "arn:aws:glue::{{data_mesh_account_id}}:*/*",
-                "arn:aws:lakeformation::{{data_mesh_account_id}}:*/*"
+                "arn:aws:lakeformation::{{data_mesh_account_id}}:*/*",
+                "arn:aws:s3:::*"
             ]
         }
     ]

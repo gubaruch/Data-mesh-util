@@ -3,6 +3,7 @@ import json
 import os
 import pystache
 import time
+import boto3
 
 
 def validate_correct_account(iam_client, role_must_exist: str):
@@ -108,15 +109,15 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         )
 
         role_arn = role_response.get('Role').get('Arn')
-
-        # attach the created policy to the role
-        iam_client.attach_role_policy(
-            RoleName=role_name,
-            PolicyArn=policy_arn
-        )
     except iam_client.exceptions.EntityAlreadyExistsException:
         role_arn = iam_client.get_role(RoleName=role_name).get(
             'Role').get('Arn')
+
+    # attach the created policy to the role
+    iam_client.attach_role_policy(
+        RoleName=role_name,
+        PolicyArn=policy_arn
+    )
 
     create_assume_role_policy(iam_client, account_id, ("Assume%s" % role_name), role_arn)
 
@@ -142,3 +143,9 @@ def create_assume_role_policy(iam_client, account_id, policy_name, role_arn):
         policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
 
     return policy_arn
+
+
+def generate_client(service: str, region: str, credentials: dict):
+    return boto3.client(service_name=service, region_name=region, aws_access_key_id=credentials.get('AccessKeyId'),
+                        aws_secret_access_key=credentials.get('SecretAccessKey'),
+                        aws_session_token=credentials.get('SessionToken'))

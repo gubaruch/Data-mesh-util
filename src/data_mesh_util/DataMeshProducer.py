@@ -1,3 +1,5 @@
+import datetime
+
 import boto3
 import os
 import sys
@@ -18,12 +20,17 @@ class DataMeshProducer:
     _iam_client = None
     _sts_client = None
     _config = {}
+    _current_region = None
 
     def __init__(self):
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
+        self._current_region = os.getenv('AWS_REGION')
 
-    def initialize_producer_account(self, s3_bucket: str, data_mesh_producer_iam_role_arn: str):
+        if self._current_region is None:
+            raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
+
+    def initialize_producer_account(self, s3_bucket: str, data_mesh_producer_role_arn: str):
         '''
         Sets up an AWS Account to act as a Data Provider into the central Data Mesh Account. This method should be invoked
         by an Administrator of the Producer Account. Creates IAM Role & Policy to get and put restricted S3 Bucket Policies.
@@ -49,7 +56,7 @@ class DataMeshProducer:
             iam_client=self._iam_client,
             account_id=self._data_producer_account_id,
             policy_name=policy_name,
-            role_arn=data_mesh_producer_iam_role_arn
+            role_arn=data_mesh_producer_role_arn
         )
 
         # now let the group assume the cross account role
@@ -139,3 +146,20 @@ class DataMeshProducer:
                     Policy=json.dumps(bucket_policy),
                     ExpectedBucketOwner=self._data_producer_account_id
                 )
+
+    def create_data_product(self, data_mesh_admin_producer_role_arn: str, database_name: str, table_name: str = None):
+        # assume the data mesh admin producer role. if this fails, then the requesting identity is wrong
+        current_account = self._sts_client.get_caller_identity()
+        session_name = "%s-%s-%s" % current_account.get('UserId'), current_account.get(
+            'Account'), datetime.datetime.now().strftime("%Y-%m-%d")
+        response = self._sts_client.assume_role(RoleArn=data_mesh_admin_producer_role_arn, RoleSessionName=session_name)
+
+        # create a glue client for the current account and with the new credentials in the data mesh account
+        current_glue_client = boto3.client('glue', region_name=self._current_region)
+        data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
+                                                      credentials=response.get('Credentials'))
+
+        # get the tables which are included in the set provided through args
+        response = current_glue_client.get_tables(
+            CatalogId=current_account
+        )
