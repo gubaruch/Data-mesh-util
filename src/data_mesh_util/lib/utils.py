@@ -23,7 +23,29 @@ def generate_policy(template_file: str, config: dict):
     return rendered
 
 
-def get_assume_role_doc(aws_principals: list = None, resource: str = None, additional_principals: dict = None):
+def add_aws_trust_to_role(iam_client, account_id: str, role_name: str):
+    '''
+    Private method to add a trust relationship to an AWS Account to a Role
+    :return:
+    '''
+    # validate that the account is suitable for configuration due to it having the DataMeshManager role installed
+    validate_correct_account(iam_client, role_name)
+
+    # update the  trust policy to include the provided account ID
+    response = iam_client.get_role(RoleName=role_name)
+
+    policy_doc = response.get('Role').get('AssumeRolePolicyDocument')
+
+    # add the account to the trust relationship
+    trusted_entities = policy_doc.get('Statement')[0].get('Principal').get('AWS')
+    if account_id not in trusted_entities:
+        trusted_entities.append(account_id)
+        policy_doc.get('Statement')[0].get('Principal')['AWS'] = trusted_entities
+
+    iam_client.update_assume_role_policy(RoleName=role_name, PolicyDocument=json.dumps(policy_doc))
+
+
+def create_assume_role_doc(aws_principals: list = None, resource: str = None, additional_principals: dict = None):
     document = {
         "Version": "2012-10-17",
         "Statement": [
@@ -112,8 +134,8 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
             Path=DATA_MESH_IAM_PATH,
             RoleName=role_name,
             AssumeRolePolicyDocument=json.dumps(
-                get_assume_role_doc(aws_principals=aws_principals,
-                                    additional_principals=additional_assuming_principals)),
+                create_assume_role_doc(aws_principals=aws_principals,
+                                       additional_principals=additional_assuming_principals)),
             Description=role_desc,
             Tags=DEFAULT_TAGS
         )
@@ -153,7 +175,7 @@ def create_assume_role_policy(iam_client, account_id, policy_name, role_arn):
         response = iam_client.create_policy(
             PolicyName=policy_name,
             Path=DATA_MESH_IAM_PATH,
-            PolicyDocument=json.dumps(get_assume_role_doc(resource=role_arn)),
+            PolicyDocument=json.dumps(create_assume_role_doc(resource=role_arn)),
             Description=("Policy allowing the grantee the ability to assume Role %s" % role_arn),
             Tags=DEFAULT_TAGS
         )

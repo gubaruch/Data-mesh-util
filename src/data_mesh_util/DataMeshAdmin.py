@@ -23,7 +23,7 @@ class DataMeshAdmin:
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
 
-    def _validate_config(self, config: dict):
+    def _create_template_config(self, config: dict):
         if config is None:
             config = {}
 
@@ -38,7 +38,11 @@ class DataMeshAdmin:
             config["consumer_account_id"] = self._data_consumer_account_id
 
     def _create_data_mesh_manager_role(self):
-        self._validate_config(self._config)
+        '''
+        Private method to create objects needed for an administrative role that can be used to grant access to Data Mesh roles
+        :return:
+        '''
+        self._create_template_config(self._config)
 
         return utils.configure_iam(
             iam_client=self._iam_client,
@@ -51,7 +55,11 @@ class DataMeshAdmin:
             config=self._config)
 
     def _create_producer_role(self):
-        self._validate_config(self._config)
+        '''
+        Private method to create objects needed for a Producer account to connect to the Data Mesh and create data products
+        :return:
+        '''
+        self._create_template_config(self._config)
 
         # create the policy and role for the Glue Crawler that will be run to keep foreign objects in sync with the
         # catalog
@@ -79,7 +87,11 @@ class DataMeshAdmin:
             config=self._config)
 
     def _create_consumer_role(self):
-        self._validate_config(self._config)
+        '''
+        Private method to create objects needed for a Consumer account to connect to the Data Mesh and mirror data products into their account
+        :return:
+        '''
+        self._create_template_config(self._config)
 
         return utils.configure_iam(
             iam_client=self._iam_client,
@@ -110,26 +122,9 @@ class DataMeshAdmin:
 
         return (self._data_mesh_manager_role_arn, producer_role, consumer_role)
 
-    def _trust(self, account_id: str, role_name: str):
-        # validate that the account is suitable for configuration due to it having the DataMeshManager role installed
-        utils.validate_correct_account(self._iam_client, role_name)
-
-        # update the  trust policy to include the provided account ID
-        response = self._iam_client.get_role(RoleName=role_name)
-
-        policy_doc = response.get('Role').get('AssumeRolePolicyDocument')
-
-        # add the account to the trust relationship
-        trusted_entities = policy_doc.get('Statement')[0].get('Principal').get('AWS')
-        if account_id not in trusted_entities:
-            trusted_entities.append(account_id)
-            policy_doc.get('Statement')[0].get('Principal')['AWS'] = trusted_entities
-
-        self._iam_client.update_assume_role_policy(RoleName=role_name, PolicyDocument=json.dumps(policy_doc))
-
     def trust_account(self, account_id: str):
         self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
 
         # create trust relationships for the AdminProducer and AdminCrawler roles
-        self._trust(account_id=account_id, role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
-        self._trust(account_id=account_id, role_name=DATA_MESH_ADMIN_CRAWLER_ROLENAME)
+        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id, role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id, role_name=DATA_MESH_ADMIN_CRAWLER_ROLENAME)
