@@ -246,9 +246,11 @@ class DataMeshProducer:
 
             # create a crawler for the s3 location and bound to the table
             try:
+                crawler_role_arn = "arn:aws:iam::%s:role%s%s" % (
+                self._data_mesh_account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_CRAWLER_ROLENAME)
                 crawler_response = data_mesh_glue_client.create_crawler(
                     Name=table_name,
-                    Role=DATA_MESH_ADMIN_PRODUCER_ROLENAME,
+                    Role=crawler_role_arn,
                     DatabaseName=target_database_name,
                     Description='Crawler for table %s in database %s' % (table_name, target_database_name),
                     Targets={

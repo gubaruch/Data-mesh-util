@@ -23,7 +23,7 @@ def generate_policy(template_file: str, config: dict):
     return rendered
 
 
-def get_assume_role_doc(principals: list = None, resource: str = None):
+def get_assume_role_doc(aws_principals: list = None, resource: str = None, additional_principals: dict = None):
     document = {
         "Version": "2012-10-17",
         "Statement": [
@@ -34,8 +34,14 @@ def get_assume_role_doc(principals: list = None, resource: str = None):
         ]
     }
 
-    if principals is not None:
-        document.get('Statement')[0]['Principal'] = {"AWS": principals}
+    # add the mandatory AWS principals
+    if aws_principals is not None:
+        document.get('Statement')[0]['Principal'] = {"AWS": aws_principals}
+
+    # add the additional map of principals provided
+    if additional_principals is not None:
+        for k, v in additional_principals.items():
+            document.get('Statement')[0]['Principal'][k] = v
 
     if resource is not None:
         document.get('Statement')[0]['Resource'] = resource
@@ -44,7 +50,8 @@ def get_assume_role_doc(principals: list = None, resource: str = None):
 
 
 def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_template: str,
-                  role_name: str, role_desc: str, account_id: str, config: dict = None):
+                  role_name: str, role_desc: str, account_id: str, config: dict = None,
+                  additional_assuming_principals: dict = None):
     policy_arn = None
     try:
         # create an IAM Policy from the template
@@ -99,11 +106,14 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
     role_arn = None
     try:
         # now create the IAM Role with a trust policy to the indicated principal and the root user
+        aws_principals = [user_arn, ("arn:aws:iam::%s:root" % account_id)]
+
         role_response = iam_client.create_role(
             Path=DATA_MESH_IAM_PATH,
             RoleName=role_name,
             AssumeRolePolicyDocument=json.dumps(
-                get_assume_role_doc(principals=[user_arn, ("arn:aws:iam::%s:root" % account_id)])),
+                get_assume_role_doc(aws_principals=aws_principals,
+                                    additional_principals=additional_assuming_principals)),
             Description=role_desc,
             Tags=DEFAULT_TAGS
         )

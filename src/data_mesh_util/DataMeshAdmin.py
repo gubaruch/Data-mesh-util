@@ -63,7 +63,9 @@ class DataMeshAdmin:
             role_name=DATA_MESH_ADMIN_CRAWLER_ROLENAME,
             role_desc='Role to be used for Crawling foreign S3 locations and bound to the Data Mesh Catalog',
             account_id=self._data_mesh_account_id,
-            config=self._config)
+            config=self._config,
+            # add an additional ability for the glue service to assume the crawler role
+            additional_assuming_principals={'Service': 'glue.amazonaws.com'})
 
         # create the policy and role to be used for data producers
         return utils.configure_iam(
@@ -108,9 +110,7 @@ class DataMeshAdmin:
 
         return (self._data_mesh_manager_role_arn, producer_role, consumer_role)
 
-    def trust_account(self, account_id: str, role_name: str):
-        self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
-
+    def _trust(self, account_id: str, role_name: str):
         # validate that the account is suitable for configuration due to it having the DataMeshManager role installed
         utils.validate_correct_account(self._iam_client, role_name)
 
@@ -126,3 +126,10 @@ class DataMeshAdmin:
             policy_doc.get('Statement')[0].get('Principal')['AWS'] = trusted_entities
 
         self._iam_client.update_assume_role_policy(RoleName=role_name, PolicyDocument=json.dumps(policy_doc))
+
+    def trust_account(self, account_id: str):
+        self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
+
+        # create trust relationships for the AdminProducer and AdminCrawler roles
+        self._trust(account_id=account_id, role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+        self._trust(account_id=account_id, role_name=DATA_MESH_ADMIN_CRAWLER_ROLENAME)

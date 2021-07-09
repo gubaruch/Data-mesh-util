@@ -17,4 +17,4 @@ class DataMeshAdminAccountTests(unittest.TestCase):
         self._mgr.initialize_mesh_account()
 
     def test_grant_producer_access(self):
-        self._mgr.trust_account(account_id='600214582022', role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+        self._mgr.trust_account(account_id='600214582022')
