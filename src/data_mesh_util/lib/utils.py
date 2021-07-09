@@ -73,7 +73,7 @@ def create_assume_role_doc(aws_principals: list = None, resource: str = None, ad
 
 def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_template: str,
                   role_name: str, role_desc: str, account_id: str, config: dict = None,
-                  additional_assuming_principals: dict = None):
+                  additional_assuming_principals: dict = None, managed_policies_to_attach: list = None):
     policy_arn = None
     try:
         # create an IAM Policy from the template
@@ -150,6 +150,14 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         RoleName=role_name,
         PolicyArn=policy_arn
     )
+
+    # attach the indicated managed policies
+    if managed_policies_to_attach:
+        for policy in managed_policies_to_attach:
+            iam_client.attach_role_policy(
+                RoleName=role_name,
+                PolicyArn="arn:aws:iam::aws:policy/%s" % policy
+            )
 
     create_assume_role_policy(iam_client, account_id, ("Assume%s" % role_name), role_arn)
 

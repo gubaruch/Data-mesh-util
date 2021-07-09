@@ -5,6 +5,15 @@
             "Sid": "CrawlerPolicy0",
             "Effect": "Allow",
             "Action": [
+                "cloudwatch:PutMetricData",
+                "ec2:CreateNetworkInterface",
+                "ec2:DeleteNetworkInterface",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DescribeRouteTables",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeVpcAttribute",
+                "ec2:DescribeVpcEndpoints",
                 "glue:BatchCreatePartition",
                 "glue:BatchGetCrawlers",
                 "glue:CreatePartition",
@@ -35,26 +44,15 @@
                 "glue:UpdateDatabase",
                 "glue:UpdatePartition",
                 "glue:UpdateSchema",
-                "glue:UpdateTable"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "CrawlerPolicy1",
-            "Effect": "Allow",
-            "Action": [
+                "glue:UpdateTable",
+                "iam:GetRole",
+                "iam:GetRolePolicy",
+                "iam:ListRolePolicies",
                 "lakeformation:DescribeResource",
                 "lakeformation:ListPermissions",
                 "lakeformation:ListResources",
                 "lakeformation:RegisterResource",
-                "lakeformation:UpdateResource"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "CrawlerPolicy2",
-            "Effect": "Allow",
-            "Action": [
+                "lakeformation:UpdateResource",
                 "s3:GetBucketLocation",
                 "s3:GetObject",
                 "s3:GetObjectVersion",
@@ -62,6 +60,38 @@
                 "s3:ListBucketVersions"
             ],
             "Resource": "*"
+        },
+        {
+            "Sid": "CrawlerPolicy1",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": [
+                "arn:aws:logs:*:*:/aws-glue/*"
+            ]
+        },
+        {
+            "Sid": "CrawlerPolicy2",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateTags",
+                "ec2:DeleteTags"
+            ],
+            "Condition": {
+                "ForAllValues:StringEquals": {
+                    "aws:TagKeys": [
+                        "aws-glue-service-resource"
+                    ]
+                }
+            },
+            "Resource": [
+                "arn:aws:ec2:*:*:network-interface/*",
+                "arn:aws:ec2:*:*:security-group/*",
+                "arn:aws:ec2:*:*:instance/*"
+            ]
         }
     ]
 }
