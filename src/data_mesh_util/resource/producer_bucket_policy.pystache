@@ -11,7 +11,6 @@
   "Resource": ["arn:aws:s3:::{{bucket}}", "arn:aws:s3:::{{bucket}}/*"],
   "Principal": {
     "AWS": [
-      "{{data_mesh_producer_role_arn}}",
       "{{data_mesh_crawler_role_arn}}"
     ]
   }

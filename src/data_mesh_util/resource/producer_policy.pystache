@@ -63,18 +63,6 @@
             "Resource": "*"
         },
         {
-            "Sid": "ProducerPolicy2",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetBucketLocation",
-                "s3:GetObject",
-                "s3:GetObjectVersion",
-                "s3:ListBucket",
-                "s3:ListBucketVersions"
-            ],
-            "Resource": "*"
-        },
-        {
             "Sid": "ProducerPolicy3",
             "Effect": "Allow",
             "Action": [

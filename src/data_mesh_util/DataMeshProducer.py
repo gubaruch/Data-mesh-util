@@ -110,15 +110,12 @@ class DataMeshProducer:
             pass
 
         # need to grant bucket access to the producer admin and crawler roles
-        data_mesh_producer_role_arn = "arn:aws:iam::%s:role%s%s" % (
-        data_mesh_account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_PRODUCER_ROLENAME)
         data_mesh_crawler_role_arn = "arn:aws:iam::%s:role%s%s" % (
             data_mesh_account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_CRAWLER_ROLENAME)
 
         # generate a new statement for the target bucket policy
-        statement_sid = "ReadOnly-%s-%s" % (s3_bucket, data_mesh_producer_role_arn)
+        statement_sid = "ReadOnly-%s-%s" % (s3_bucket, data_mesh_crawler_role_arn)
         conf = {
-            "data_mesh_producer_role_arn": data_mesh_producer_role_arn,
             "data_mesh_crawler_role_arn": data_mesh_crawler_role_arn,
             "bucket": s3_bucket, "sid": statement_sid
         }
