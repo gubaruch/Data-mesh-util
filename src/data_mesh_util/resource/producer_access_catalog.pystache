@@ -2,7 +2,15 @@
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Sid": "VisualEditor0",
+            "Sid": "ProducerAccess0",
+            "Effect": "Allow",
+            "Action": [
+                "iam:GetRole"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ProducerAccess1",
             "Effect": "Allow",
             "Action": [
                 "s3:PutBucketPolicy",
@@ -11,7 +19,7 @@
             "Resource": ["arn:aws:s3:::{{bucket}}"]
         },
         {
-            "Sid": "VisualEditor1",
+            "Sid": "ProducerAccess2",
             "Effect": "Allow",
             "Action": [
                 "glue:GetTables",

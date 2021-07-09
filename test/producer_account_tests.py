@@ -12,7 +12,7 @@ class DataMeshProducerAccountTests(unittest.TestCase):
 
     def test_setup_producer_iam_role(self):
         self.mgr.initialize_producer_account(
-            s3_bucket="org-1-data/tpcds",
+            s3_bucket="org-1-data",
             data_mesh_producer_role_arn=PRODUCER_ROLE_ARN
         )
 
@@ -22,7 +22,7 @@ class DataMeshProducerAccountTests(unittest.TestCase):
     def test_grant_bucket_access(self):
         self.mgr.grant_datamesh_access_to_s3(
             s3_bucket="org-1-data",
-            data_mesh_producer_role_arn=PRODUCER_ROLE_ARN
+            data_mesh_account_id="887210671223"
         )
 
     def test_create_data_product(self):

@@ -94,7 +94,7 @@ class DataMeshProducer:
             self._iam_client.create_policy_version(PolicyArn=arn, PolicyDocument=json.dumps(policy_doc),
                                                    SetAsDefault=True)
 
-    def grant_datamesh_access_to_s3(self, s3_bucket: str, data_mesh_producer_role_arn: str):
+    def grant_datamesh_access_to_s3(self, s3_bucket: str, data_mesh_account_id: str):
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
 
         # validate that we are being run within the correct account
@@ -109,9 +109,19 @@ class DataMeshProducer:
         except s3_client.exceptions.from_code('NoSuchBucketPolicy'):
             pass
 
+        # need to grant bucket access to the producer admin and crawler roles
+        data_mesh_producer_role_arn = "arn:aws:iam::%s:role%s%s" % (
+        data_mesh_account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+        data_mesh_crawler_role_arn = "arn:aws:iam::%s:role%s%s" % (
+            data_mesh_account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_CRAWLER_ROLENAME)
+
         # generate a new statement for the target bucket policy
         statement_sid = "ReadOnly-%s-%s" % (s3_bucket, data_mesh_producer_role_arn)
-        conf = {"data_mesh_role_arn": data_mesh_producer_role_arn, "bucket": s3_bucket, "sid": statement_sid}
+        conf = {
+            "data_mesh_producer_role_arn": data_mesh_producer_role_arn,
+            "data_mesh_crawler_role_arn": data_mesh_crawler_role_arn,
+            "bucket": s3_bucket, "sid": statement_sid
+        }
         statement = json.loads(utils.generate_policy(template_file="producer_bucket_policy.pystache", config=conf))
 
         if get_bucket_policy_response is None or get_bucket_policy_response.get('Policy') is None:
@@ -164,6 +174,15 @@ class DataMeshProducer:
 
     def create_data_product(self, data_mesh_producer_role_arn: str, source_database_name: str,
                             target_database_name: str, table_name_regex: str = None):
+        '''
+        Creates a copy of a local set of objects within the data mesh account and sets up synchronisation between the
+        two accounts.
+        :param data_mesh_producer_role_arn:
+        :param source_database_name:
+        :param target_database_name:
+        :param table_name_regex:
+        :return:
+        '''
         # assume the data mesh admin producer role. if this fails, then the requesting identity is wrong
         current_account = self._sts_client.get_caller_identity()
         session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
@@ -244,27 +263,28 @@ class DataMeshProducer:
             except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
                 pass
 
-            # create a crawler for the s3 location and bound to the table
-            try:
-                crawler_role_arn = "arn:aws:iam::%s:role%s%s" % (
-                self._data_mesh_account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_CRAWLER_ROLENAME)
-                crawler_response = data_mesh_glue_client.create_crawler(
-                    Name=table_name,
-                    Role=crawler_role_arn,
-                    DatabaseName=target_database_name,
-                    Description='Crawler for table %s in database %s' % (table_name, target_database_name),
-                    Targets={
-                        'S3Targets': [
-                            {
-                                'Path': s3_path
-                            }
-                        ]
-                    },
-                    SchemaChangePolicy={
-                        'UpdateBehavior': 'UPDATE_IN_DATABASE',
-                        'DeleteBehavior': 'DEPRECATE_IN_DATABASE'
-                    },
-                    Tags=utils.flatten_default_tags()
-                )
-            except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
-                pass
+            # create a crawler for the s3 location and bound to the table if we're not running at database level
+            if table_name_regex is not None:
+                try:
+                    crawler_role_arn = "arn:aws:iam::%s:role%s%s" % (
+                        self._data_mesh_account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_CRAWLER_ROLENAME)
+                    crawler_response = data_mesh_glue_client.create_crawler(
+                        Name=table_name,
+                        Role=crawler_role_arn,
+                        DatabaseName=target_database_name,
+                        Description='Crawler for table %s in database %s' % (table_name, target_database_name),
+                        Targets={
+                            'S3Targets': [
+                                {
+                                    'Path': s3_path
+                                }
+                            ]
+                        },
+                        SchemaChangePolicy={
+                            'UpdateBehavior': 'UPDATE_IN_DATABASE',
+                            'DeleteBehavior': 'DEPRECATE_IN_DATABASE'
+                        },
+                        Tags=utils.flatten_default_tags()
+                    )
+                except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
+                    pass

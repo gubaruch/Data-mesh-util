@@ -122,9 +122,16 @@ class DataMeshAdmin:
 
         return (self._data_mesh_manager_role_arn, producer_role, consumer_role)
 
-    def trust_account(self, account_id: str):
+    def enable_account_as_producer(self, account_id: str):
+        '''
+        Enables a remote account to act as a data producer by granting them access to the DataMeshAdminProducer and
+        DataMeshAdminCrawler Roles
+        :return:
+        '''
         self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
 
         # create trust relationships for the AdminProducer and AdminCrawler roles
-        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id, role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
-        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id, role_name=DATA_MESH_ADMIN_CRAWLER_ROLENAME)
+        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
+                                    role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
+                                    role_name=DATA_MESH_ADMIN_CRAWLER_ROLENAME)
