@@ -232,8 +232,37 @@ class DataMeshProducer:
             # cleanup the TableInfo object to be usable as a TableInput
             t = self._cleanup_table_def(table)
 
+            table_name = t.get('Name')
+            s3_path = t.get('StorageDescriptor').get('Location')
+
             # create the glue catalog entry
-            data_mesh_glue_client.create_table(
-                DatabaseName=target_database_name,
-                TableInput=t
-            )
+            try:
+                data_mesh_glue_client.create_table(
+                    DatabaseName=target_database_name,
+                    TableInput=t
+                )
+            except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
+                pass
+
+            # create a crawler for the s3 location and bound to the table
+            try:
+                crawler_response = data_mesh_glue_client.create_crawler(
+                    Name=table_name,
+                    Role=DATA_MESH_ADMIN_PRODUCER_ROLENAME,
+                    DatabaseName=target_database_name,
+                    Description='Crawler for table %s in database %s' % (table_name, target_database_name),
+                    Targets={
+                        'S3Targets': [
+                            {
+                                'Path': s3_path
+                            }
+                        ]
+                    },
+                    SchemaChangePolicy={
+                        'UpdateBehavior': 'UPDATE_IN_DATABASE',
+                        'DeleteBehavior': 'DEPRECATE_IN_DATABASE'
+                    },
+                    Tags=utils.flatten_default_tags()
+                )
+            except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
+                pass

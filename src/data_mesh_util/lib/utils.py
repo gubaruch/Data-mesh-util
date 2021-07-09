@@ -128,6 +128,14 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
     return role_arn
 
 
+def flatten_default_tags():
+    output = {}
+    for t in DEFAULT_TAGS:
+        output[t.get('Key')] = t.get('Value')
+
+    return output
+
+
 def create_assume_role_policy(iam_client, account_id, policy_name, role_arn):
     # create a policy that lets someone assume this new role
     policy_arn = None

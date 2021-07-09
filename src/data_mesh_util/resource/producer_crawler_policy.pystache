@@ -2,15 +2,11 @@
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Sid": "ProducerPolicy0",
+            "Sid": "CrawlerPolicy0",
             "Effect": "Allow",
             "Action": [
                 "glue:BatchCreatePartition",
                 "glue:BatchGetCrawlers",
-                "glue:CreateClassifier",
-                "glue:CreateCrawler",
-                "glue:CreateDatabase",
-                "glue:CreateJob",
                 "glue:CreatePartition",
                 "glue:CreateSchema",
                 "glue:CreateTable",
@@ -27,21 +23,15 @@
                 "glue:GetTableVersion",
                 "glue:GetTableVersions",
                 "glue:GetTags",
-                "glue:ImportCatalogToGlue",
                 "glue:ListCrawlers",
                 "glue:ListRegistries",
                 "glue:ListSchemas",
                 "glue:ListSchemaVersions",
-                "glue:PutResourcePolicy",
                 "glue:PutSchemaVersionMetadata",
                 "glue:QuerySchemaVersionMetadata",
                 "glue:RegisterSchemaVersion",
                 "glue:SearchTables",
-                "glue:StartCrawler",
-                "glue:StartCrawlerSchedule",
                 "glue:TagResource",
-                "glue:UpdateCrawler",
-                "glue:UpdateCrawlerSchedule",
                 "glue:UpdateDatabase",
                 "glue:UpdatePartition",
                 "glue:UpdateSchema",
@@ -50,11 +40,10 @@
             "Resource": "*"
         },
         {
-            "Sid": "ProducerPolicy1",
+            "Sid": "CrawlerPolicy1",
             "Effect": "Allow",
             "Action": [
                 "lakeformation:DescribeResource",
-                "lakeformation:GrantPermissions",
                 "lakeformation:ListPermissions",
                 "lakeformation:ListResources",
                 "lakeformation:RegisterResource",
@@ -63,7 +52,7 @@
             "Resource": "*"
         },
         {
-            "Sid": "ProducerPolicy2",
+            "Sid": "CrawlerPolicy2",
             "Effect": "Allow",
             "Action": [
                 "s3:GetBucketLocation",
@@ -73,14 +62,6 @@
                 "s3:ListBucketVersions"
             ],
             "Resource": "*"
-        },
-        {
-            "Sid": "ProducerPolicy3",
-            "Effect": "Allow",
-            "Action": [
-                "iam:PassRole"
-            ],
-            "Resource": "arn:aws:iam::{{data_mesh_account_id}}:role/AwsDataMesh/DataMeshAdminCrawler"
         }
     ]
 }

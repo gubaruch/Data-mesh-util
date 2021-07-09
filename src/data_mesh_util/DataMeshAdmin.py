@@ -40,19 +40,32 @@ class DataMeshAdmin:
     def _create_data_mesh_manager_role(self):
         self._validate_config(self._config)
 
-        self._data_mesh_manager_role_arn = utils.configure_iam(
+        return utils.configure_iam(
             iam_client=self._iam_client,
-            policy_name='DataMeshManagerBootstrapPolicy',
-            policy_desc='Initial IAM Role enabling the Data Mesh Manager Policy to create future Resource Policies',
+            policy_name='DataMeshManagerPolicy',
+            policy_desc='IAM Policy to bootstrap the Data Mesh Admin',
             policy_template="data_mesh_setup_iam_policy.pystache",
             role_name=DATA_MESH_MANAGER_ROLENAME,
-            role_desc='Role to be used for all Data Mesh Management functionality',
+            role_desc='Role to be used for the Data Mesh Manager function',
             account_id=self._data_mesh_account_id,
             config=self._config)
 
     def _create_producer_role(self):
         self._validate_config(self._config)
 
+        # create the policy and role for the Glue Crawler that will be run to keep foreign objects in sync with the
+        # catalog
+        self._data_mesh_manager_role_arn = utils.configure_iam(
+            iam_client=self._iam_client,
+            policy_name='DataMeshProducerCrawlerPolicy',
+            policy_desc='IAM Policy to allow a Data Mesh Crawler for remote systems',
+            policy_template="producer_crawler_policy.pystache",
+            role_name=DATA_MESH_ADMIN_CRAWLER_ROLENAME,
+            role_desc='Role to be used for Crawling foreign S3 locations and bound to the Data Mesh Catalog',
+            account_id=self._data_mesh_account_id,
+            config=self._config)
+
+        # create the policy and role to be used for data producers
         return utils.configure_iam(
             iam_client=self._iam_client,
             policy_name='DataMeshProducerPolicy',
