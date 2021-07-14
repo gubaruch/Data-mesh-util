@@ -176,6 +176,35 @@ def flatten_default_tags():
     return output
 
 
+def get_or_create_database(glue_client, database_name: str, database_desc: str, default_principal: str):
+    database_exists = None
+    try:
+        database_exists = glue_client.get_database(
+            Name=database_name
+        )
+    except glue_client.exceptions.from_code('EntityNotFoundException'):
+        pass
+
+    if database_exists is None or 'Database' not in database_exists:
+        # create the database
+        glue_client.create_database(
+            DatabaseInput={
+                "Name": database_name,
+                "Description": database_desc,
+                # 'CreateTableDefaultPermissions': [
+                #     {
+                #         'Principal': {
+                #             'DataLakePrincipalIdentifier': default_principal
+                #         },
+                #         'Permissions': [
+                #             'ALL'
+                #         ]
+                #     },
+                # ],
+            }
+        )
+
+
 def create_assume_role_policy(iam_client, account_id, policy_name, role_arn):
     # create a policy that lets someone assume this new role
     policy_arn = None
@@ -198,3 +227,16 @@ def generate_client(service: str, region: str, credentials: dict):
     return boto3.client(service_name=service, region_name=region, aws_access_key_id=credentials.get('AccessKeyId'),
                         aws_secret_access_key=credentials.get('SecretAccessKey'),
                         aws_session_token=credentials.get('SessionToken'))
+
+
+def accept_pending_lf_resource_share(ram_client, sender_account: str):
+    get_response = ram_client.get_resource_share_invitations(
+    )
+
+    for r in get_response.get('resourceShareInvitations'):
+        # only accept lakeformation shares
+        if r.get('senderAccountId') == sender_account and 'LakeFormation' in r.get('resourceShareName') and r.get(
+                'status') == 'PENDING':
+            accept_response = ram_client.accept_resource_share_invitation(
+                resourceShareInvitationArn=r.get('resourceShareInvitationArn')
+            )

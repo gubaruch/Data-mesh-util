@@ -25,7 +25,18 @@
                 "glue:GetTables",
                 "glue:GetTable",
                 "glue:GetDatabases",
-                "glue:GetDatabase"
+                "glue:GetDatabase",
+                "glue:CreateDatabase",
+                "glue:CreateTable"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ProducerAccess3",
+            "Effect": "Allow",
+            "Action": [
+                "ram:GetResourceShareInvitations",
+                "ram:AcceptResourceShareInvitation"
             ],
             "Resource": "*"
         }

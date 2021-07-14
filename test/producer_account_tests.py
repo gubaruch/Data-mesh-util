@@ -29,6 +29,5 @@ class DataMeshProducerAccountTests(unittest.TestCase):
         self.mgr.create_data_product(
             data_mesh_producer_role_arn=PRODUCER_ROLE_ARN,
             source_database_name='tpcds',
-            target_database_name='tpcds-600214582022',
             table_name_regex='customer'
         )

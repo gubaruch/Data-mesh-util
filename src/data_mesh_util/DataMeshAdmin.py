@@ -16,12 +16,14 @@ class DataMeshAdmin:
     _data_consumer_account_id = None
     _data_mesh_manager_role_arn = None
     _iam_client = None
+    _lf_client = None
     _sts_client = None
     _config = {}
 
     def __init__(self):
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
+        self._lf_client = boto3.client('lakeformation')
 
     def _create_template_config(self, config: dict):
         if config is None:
@@ -44,7 +46,9 @@ class DataMeshAdmin:
         '''
         self._create_template_config(self._config)
 
-        return utils.configure_iam(
+        current_identity = self._sts_client.get_caller_identity()
+
+        iam_config = utils.configure_iam(
             iam_client=self._iam_client,
             policy_name='DataMeshManagerPolicy',
             policy_desc='IAM Policy to bootstrap the Data Mesh Admin',
@@ -54,6 +58,20 @@ class DataMeshAdmin:
             account_id=self._data_mesh_account_id,
             config=self._config)
 
+        # remove default IAM settings in lakeformation for the account, and setup the manager role and this caller as admins
+        response = self._lf_client.put_data_lake_settings(
+            DataLakeSettings={
+                "DataLakeAdmins": [
+                    {"DataLakePrincipalIdentifier": iam_config},
+                    # add the current caller identity as an admin
+                    {"DataLakePrincipalIdentifier": current_identity.get('Arn')}
+                ],
+                'CreateTableDefaultPermissions': []
+            }
+        )
+
+        return iam_config
+
     def _create_producer_role(self):
         '''
         Private method to create objects needed for a Producer account to connect to the Data Mesh and create data products
@@ -61,22 +79,8 @@ class DataMeshAdmin:
         '''
         self._create_template_config(self._config)
 
-        # create the policy and role for the Glue Crawler that will be run to keep foreign objects in sync with the
-        # catalog
-        self._data_mesh_manager_role_arn = utils.configure_iam(
-            iam_client=self._iam_client,
-            policy_name='DataMeshProducerCrawlerPolicy',
-            policy_desc='IAM Policy to allow a Data Mesh Crawler for remote systems',
-            policy_template="producer_crawler_policy.pystache",
-            role_name=DATA_MESH_ADMIN_CRAWLER_ROLENAME,
-            role_desc='Role to be used for Crawling foreign S3 locations and bound to the Data Mesh Catalog',
-            account_id=self._data_mesh_account_id,
-            config=self._config,
-            # add an additional ability for the glue service to assume the crawler role
-            additional_assuming_principals={'Service': 'glue.amazonaws.com'})
-
         # create the policy and role to be used for data producers
-        return utils.configure_iam(
+        iam_role = utils.configure_iam(
             iam_client=self._iam_client,
             policy_name='DataMeshProducerPolicy',
             policy_desc='IAM Role enabling Accounts to become Data Producers',
@@ -85,6 +89,22 @@ class DataMeshAdmin:
             role_desc='Role to be used for all Data Mesh Producer Accounts',
             account_id=self._data_mesh_account_id,
             config=self._config)
+
+        # grant this role the ability to create databases and tables
+        response = self._lf_client.grant_permissions(
+            Principal={
+                'DataLakePrincipalIdentifier': iam_role
+            },
+            Resource={'Catalog': {}},
+            Permissions=[
+                'CREATE_DATABASE'
+            ],
+            PermissionsWithGrantOption=[
+                'CREATE_DATABASE'
+            ]
+        )
+
+        return iam_role
 
     def _create_consumer_role(self):
         '''
@@ -124,14 +144,11 @@ class DataMeshAdmin:
 
     def enable_account_as_producer(self, account_id: str):
         '''
-        Enables a remote account to act as a data producer by granting them access to the DataMeshAdminProducer and
-        DataMeshAdminCrawler Roles
+        Enables a remote account to act as a data producer by granting them access to the DataMeshAdminProducer Role
         :return:
         '''
         self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
 
-        # create trust relationships for the AdminProducer and AdminCrawler roles
+        # create trust relationships for the AdminProducer roles
         utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
                                     role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
-        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
-                                    role_name=DATA_MESH_ADMIN_CRAWLER_ROLENAME)
