@@ -26,8 +26,10 @@ class DataMeshProducerAccountTests(unittest.TestCase):
         )
 
     def test_create_data_product(self):
-        self.mgr.create_data_product(
+        self.mgr.create_data_products(
             data_mesh_producer_role_arn=PRODUCER_ROLE_ARN,
             source_database_name='tpcds',
-            table_name_regex='customer'
+            table_name_regex='customer',
+            sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",
+            sync_mesh_crawler_role_arn="arn:aws:iam::600214582022:role/service-role/AWSGlueServiceRole-Crawler"
         )

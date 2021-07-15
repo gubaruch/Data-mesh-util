@@ -27,7 +27,8 @@
                 "glue:GetDatabases",
                 "glue:GetDatabase",
                 "glue:CreateDatabase",
-                "glue:CreateTable"
+                "glue:CreateTable",
+                "glue:CreateCrawler"
             ],
             "Resource": "*"
         },

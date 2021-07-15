@@ -1,4 +1,5 @@
 import datetime
+import time
 
 import boto3
 import os
@@ -110,8 +111,7 @@ class DataMeshProducer:
             pass
 
         # need to grant bucket access to the producer admin role
-        data_mesh_producer_role_arn = "arn:aws:iam::%s:role%s%s" % (
-            data_mesh_account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+        data_mesh_producer_role_arn = utils.get_datamesh_producer_role_arn(data_mesh_account_id)
 
         # generate a new statement for the target bucket policy
         statement_sid = "ReadOnly-%s-%s" % (s3_bucket, data_mesh_producer_role_arn)
@@ -160,6 +160,7 @@ class DataMeshProducer:
         def rm(prop):
             del t[prop]
 
+        # remove properties from a TableInfo object returned from get_table to be compatible with put_table
         rm('DatabaseName')
         rm('CreateTime')
         rm('UpdateTime')
@@ -169,47 +170,56 @@ class DataMeshProducer:
 
         return t
 
-    def create_data_product(self, data_mesh_producer_role_arn: str, source_database_name: str,
-                            table_name_regex: str = None):
-        '''
-        Creates a copy of a local set of objects within the data mesh account and sets up synchronisation between the
-        two accounts.
-        :param data_mesh_producer_role_arn:
-        :param source_database_name:
-        :param target_database_name:
-        :param table_name_regex:
-        :return:
-        '''
-        # assume the data mesh admin producer role. if this fails, then the requesting identity is wrong
-        current_account = self._sts_client.get_caller_identity()
-        session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
-            'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
-        sts_session = self._sts_client.assume_role(RoleArn=data_mesh_producer_role_arn,
-                                                   RoleSessionName=session_name)
+    def create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
+                          data_mesh_producer_role_arn: str, data_mesh_database_name: str, producer_account_id: str,
+                          data_mesh_account_id: str):
+        # cleanup the TableInfo object to be usable as a TableInput
+        t = self._cleanup_table_def(table_def)
 
-        # generate the target database name for the mesh
-        data_mesh_database_name = "%s-%s" % (source_database_name, current_account.get('Account'))
-        producer_account_resource_share_database = "%s-%s" % (source_database_name, DATA_MESH_DATABASE_NAME)
+        table_name = t.get('Name')
 
-        # generate a reference to the current account data producer role arn
-        producer_role_arn = "arn:aws:iam::%s:role%s%s" % (
-            current_account.get('Account'), DATA_MESH_IAM_PATH, DATA_MESH_PRODUCER_ROLENAME)
+        # create the glue catalog entry
+        try:
+            data_mesh_glue_client.create_table(
+                DatabaseName=data_mesh_database_name,
+                TableInput=t
+            )
+        except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
+            pass
 
-        # parse what the data mesh account ID is for later use
-        data_mesh_account_id = sts_session.get('AssumedRoleUser').get('Arn').split(':')[4]
+        utils.lf_grant_all(lf_client=data_mesh_lf_client, principal=data_mesh_producer_role_arn,
+                           database_name=data_mesh_database_name, table_name=table_name)
 
-        # create clients for the current account and with the new credentials in the data mesh account
-        current_glue_client = boto3.client('glue', region_name=self._current_region)
-        current_ram_client = boto3.client('ram', region_name=self._current_region)
-        data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
-                                                      credentials=sts_session.get('Credentials'))
-        data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
-                                                    credentials=sts_session.get('Credentials'))
+        # create a resource link for the data mesh table into the producer account
+        link_table_name = "%s_link" % table_name
+        try:
+            data_mesh_glue_client.create_table(
+                DatabaseName=data_mesh_database_name,
+                TableInput={"Name": link_table_name,
+                            "TargetTable": {"CatalogId": producer_account_id,
+                                            "DatabaseName": data_mesh_database_name,
+                                            "Name": table_name
+                                            }
+                            }
+            )
 
+            # grant required permissions to the producer account for the resource link
+            utils.lf_grant_all(lf_client=data_mesh_lf_client, principal=producer_account_id,
+                               database_name=data_mesh_database_name, table_name=link_table_name)
+
+            # in the producer account, accept the RAM share after 1 second - seems to be an async delay
+            time.sleep(1)
+            utils.accept_pending_lf_resource_share(ram_client=producer_ram_client, sender_account=data_mesh_account_id)
+        except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
+            pass
+
+        return link_table_name
+
+    def _load_glue_tables(self, glue_client, catalog_id: str, source_db_name: str, table_name_regex: str):
         # get the tables which are included in the set provided through args
         get_tables_args = {
-            'CatalogId': current_account.get('Account'),
-            'DatabaseName': source_database_name
+            'CatalogId': catalog_id,
+            'DatabaseName': source_db_name
         }
 
         # add the table filter as a regex matching anything including the provided table
@@ -223,7 +233,7 @@ class DataMeshProducer:
             if last_token is not None:
                 get_tables_args['NextToken'] = last_token
 
-            get_table_response = current_glue_client.get_tables(
+            get_table_response = glue_client.get_tables(
                 **get_tables_args
             )
 
@@ -235,9 +245,58 @@ class DataMeshProducer:
             # add the tables returned from this instance of the request
             if not get_table_response.get('TableList'):
                 raise Exception("Unable to find any Tables matching %s in Database %s" % (table_name_regex,
-                                                                                          source_database_name))
+                                                                                          source_db_name))
             else:
                 all_tables.extend(get_table_response.get('TableList'))
+
+        return all_tables
+
+    def create_data_products(self, data_mesh_producer_role_arn: str, source_database_name: str,
+                             table_name_regex: str = None, sync_mesh_catalog_schedule: str = None,
+                             sync_mesh_crawler_role_arn: str = None):
+        '''
+        Creates a copy of a local set of objects within the data mesh account and sets up synchronisation between the
+        two accounts.
+        :param data_mesh_producer_role_arn:
+        :param source_database_name:
+        :param target_database_name:
+        :param table_name_regex:
+        :return:
+        '''
+        # assume the data mesh admin producer role. if this fails, then the requesting identity is wrong
+        current_account = self._sts_client.get_caller_identity()
+        session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
+            'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
+        data_mesh_sts_session = self._sts_client.assume_role(RoleArn=data_mesh_producer_role_arn,
+                                                             RoleSessionName=session_name)
+
+        # generate the target database name for the mesh
+        data_mesh_database_name = "%s-%s" % (source_database_name, current_account.get('Account'))
+        producer_account_resource_share_database = "%s-%s" % (source_database_name, DATA_MESH_DATABASE_NAME)
+
+        # generate a reference to the current account data producer role arn
+        producer_role_arn = utils.get_producer_role_arn(
+            account_id=current_account.get('Account')
+        )
+
+        # parse what the data mesh account ID is for later use
+        data_mesh_account_id = data_mesh_sts_session.get('AssumedRoleUser').get('Arn').split(':')[4]
+
+        # create clients for the current account and with the new credentials in the data mesh account
+        current_glue_client = boto3.client('glue', region_name=self._current_region)
+        current_ram_client = boto3.client('ram', region_name=self._current_region)
+        data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
+                                                      credentials=data_mesh_sts_session.get('Credentials'))
+        data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
+                                                    credentials=data_mesh_sts_session.get('Credentials'))
+
+        # load the specified tables to be created as data products
+        all_tables = self._load_glue_tables(
+            glue_client=current_glue_client,
+            catalog_id=current_account.get('Account'),
+            source_db_name=source_database_name,
+            table_name_regex=table_name_regex
+        )
 
         # get or create the target database exists in the mesh account
         utils.get_or_create_database(
@@ -257,82 +316,26 @@ class DataMeshProducer:
         )
 
         for table in all_tables:
-            # cleanup the TableInfo object to be usable as a TableInput
-            t = self._cleanup_table_def(table)
+            table_s3_path = table.get('StorageDescriptor').get('Location')
 
-            table_name = t.get('Name')
-            s3_path = t.get('StorageDescriptor').get('Location')
-
-            # create the glue catalog entry
-            try:
-                data_mesh_glue_client.create_table(
-                    DatabaseName=data_mesh_database_name,
-                    TableInput=t
-                )
-            except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
-                pass
-
-            # grant all permissions to the producer account for the resource link
-            data_mesh_lf_client.grant_permissions(
-                Principal={
-                    'DataLakePrincipalIdentifier': data_mesh_producer_role_arn
-                },
-                Resource={
-                    'Table': {
-                        'DatabaseName': data_mesh_database_name,
-                        'Name': table_name
-                    }
-                },
-                # producer role for this linked table has full rights on the Data Mesh Object
-                Permissions=[
-                    'ALL'
-                ],
-                PermissionsWithGrantOption=[
-                    'ALL'
-                ]
+            # create a mesh table for the local copy
+            created_table = self.create_mesh_table(
+                table_def=table,
+                data_mesh_glue_client=data_mesh_glue_client,
+                data_mesh_lf_client=data_mesh_lf_client,
+                producer_ram_client=current_ram_client,
+                data_mesh_producer_role_arn=data_mesh_producer_role_arn,
+                data_mesh_database_name=data_mesh_database_name,
+                producer_account_id=current_account.get('Account'),
+                data_mesh_account_id=data_mesh_account_id
             )
-            try:
-                pass
-            except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
-                pass
 
-            # create a resource link for the data mesh table into the producer account
-            link_table_name = "%s_link" % table_name
-            try:
-                data_mesh_glue_client.create_table(
-                    DatabaseName=data_mesh_database_name,
-                    TableInput={"Name": link_table_name,
-                                "TargetTable": {"CatalogId": current_account.get('Account'),
-                                                "DatabaseName": data_mesh_database_name,
-                                                "Name": table_name
-                                                }
-                                }
+            if sync_mesh_catalog_schedule is not None:
+                utils.create_crawler(
+                    glue_client=current_glue_client,
+                    database_name=producer_account_resource_share_database,
+                    table_name=created_table,
+                    s3_location=table_s3_path,
+                    crawler_role=sync_mesh_crawler_role_arn,
+                    sync_schedule=sync_mesh_catalog_schedule
                 )
-            except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
-                pass
-
-            # grant required permissions to the producer account for the resource link
-            try:
-                data_mesh_lf_client.grant_permissions(
-                    Principal={
-                        'DataLakePrincipalIdentifier': current_account.get('Account')
-                    },
-                    Resource={
-                        'Table': {
-                            'DatabaseName': data_mesh_database_name,
-                            'Name': link_table_name
-                        },
-                    },
-                    # producer role for this linked table has full rights on the Data Mesh Object
-                    Permissions=[
-                        'ALL'
-                    ],
-                    PermissionsWithGrantOption=[
-                        'ALL'
-                    ]
-                )
-            except data_mesh_lf_client.exceptions.from_code('AlreadyExistsException'):
-                pass
-
-            # in the producer account, accept the RAM share
-            utils.accept_pending_lf_resource_share(ram_client=current_ram_client, sender_account=data_mesh_account_id)

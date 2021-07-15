@@ -223,13 +223,47 @@ def create_assume_role_policy(iam_client, account_id, policy_name, role_arn):
     return policy_arn
 
 
+def get_producer_role_arn(account_id: str):
+    return "arn:aws:iam::%s:role%s%s" % (account_id, DATA_MESH_IAM_PATH, DATA_MESH_PRODUCER_ROLENAME)
+
+
+def get_datamesh_producer_role_arn(account_id: str):
+    return "arn:aws:iam::%s:role%s%s" % (account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+
+
 def generate_client(service: str, region: str, credentials: dict):
     return boto3.client(service_name=service, region_name=region, aws_access_key_id=credentials.get('AccessKeyId'),
                         aws_secret_access_key=credentials.get('SecretAccessKey'),
                         aws_session_token=credentials.get('SessionToken'))
 
 
+def lf_grant_all(lf_client, principal: str, database_name: str, table_name: str):
+    try:
+        # grant all permissions to the producer account for the resource link
+        lf_client.grant_permissions(
+            Principal={
+                'DataLakePrincipalIdentifier': principal
+            },
+            Resource={
+                'Table': {
+                    'DatabaseName': database_name,
+                    'Name': table_name
+                }
+            },
+            # producer role for this linked table has full rights on the Data Mesh Object
+            Permissions=[
+                'ALL'
+            ],
+            PermissionsWithGrantOption=[
+                'ALL'
+            ]
+        )
+    except lf_client.exceptions.from_code('AlreadyExistsException'):
+        pass
+
+
 def accept_pending_lf_resource_share(ram_client, sender_account: str):
+    accepted_one = False
     get_response = ram_client.get_resource_share_invitations(
     )
 
@@ -237,6 +271,39 @@ def accept_pending_lf_resource_share(ram_client, sender_account: str):
         # only accept lakeformation shares
         if r.get('senderAccountId') == sender_account and 'LakeFormation' in r.get('resourceShareName') and r.get(
                 'status') == 'PENDING':
-            accept_response = ram_client.accept_resource_share_invitation(
+            ram_client.accept_resource_share_invitation(
                 resourceShareInvitationArn=r.get('resourceShareInvitationArn')
             )
+            accepted_one = True
+
+    if accepted_one is False:
+        raise Exception("No Available RAM Shares to Accept")
+
+
+def create_crawler(glue_client, crawler_role: str, database_name: str, table_name: str, s3_location: str,
+                   sync_schedule: str, enable_lineage: bool = True):
+    glue_client.create_crawler(
+        Name='%s-%s' % (database_name, table_name),
+        Role=crawler_role,
+        DatabaseName=database_name,
+        Description="S3 Crawler to sync structure of %s.%s to Data Mesh" % (database_name, table_name),
+        Targets={
+            'S3Targets': [
+                {
+                    'Path': s3_location
+                },
+            ]
+        },
+        Schedule=sync_schedule,
+        SchemaChangePolicy={
+            'UpdateBehavior': 'LOG',
+            'DeleteBehavior': 'LOG'
+        },
+        RecrawlPolicy={
+            'RecrawlBehavior': 'CRAWL_NEW_FOLDERS_ONLY'
+        },
+        LineageConfiguration={
+            'CrawlerLineageSettings': 'ENABLE' if enable_lineage is True else 'DISABLE'
+        },
+        Tags=flatten_default_tags()
+    )

@@ -4,8 +4,6 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "resource"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
-import json
-import shortuuid
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
 
