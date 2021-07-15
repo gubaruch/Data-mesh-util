@@ -24,6 +24,7 @@
             "Action": [
                 "glue:GetTables",
                 "glue:GetTable",
+                "glue:GetCrawler",
                 "glue:GetDatabases",
                 "glue:GetDatabase",
                 "glue:CreateDatabase",
@@ -38,6 +39,14 @@
             "Action": [
                 "ram:GetResourceShareInvitations",
                 "ram:AcceptResourceShareInvitation"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ProducerAccess4",
+            "Effect": "Allow",
+            "Action": [
+                "lakeformation:GrantPermissions"
             ],
             "Resource": "*"
         }

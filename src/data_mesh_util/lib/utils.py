@@ -191,16 +191,6 @@ def get_or_create_database(glue_client, database_name: str, database_desc: str, 
             DatabaseInput={
                 "Name": database_name,
                 "Description": database_desc,
-                # 'CreateTableDefaultPermissions': [
-                #     {
-                #         'Principal': {
-                #             'DataLakePrincipalIdentifier': default_principal
-                #         },
-                #         'Permissions': [
-                #             'ALL'
-                #         ]
-                #     },
-                # ],
             }
         )
 
@@ -237,27 +227,33 @@ def generate_client(service: str, region: str, credentials: dict):
                         aws_session_token=credentials.get('SessionToken'))
 
 
-def lf_grant_all(lf_client, principal: str, database_name: str, table_name: str):
+def lf_grant_all(lf_client, principal: str, database_name: str, table_name: str = None):
     try:
         # grant all permissions to the producer account for the resource link
-        lf_client.grant_permissions(
-            Principal={
+        table_spec = {
+            'DatabaseName': database_name
+        }
+        if table_name is None or table_name == "*":
+            table_spec['TableWildcard'] = {}
+        else:
+            table_spec['Name'] = table_name
+
+        args = {
+            "Principal": {
                 'DataLakePrincipalIdentifier': principal
             },
-            Resource={
-                'Table': {
-                    'DatabaseName': database_name,
-                    'Name': table_name
-                }
+            "Resource": {
+                'Table': table_spec
             },
             # producer role for this linked table has full rights on the Data Mesh Object
-            Permissions=[
+            "Permissions": [
                 'ALL'
             ],
-            PermissionsWithGrantOption=[
+            "PermissionsWithGrantOption": [
                 'ALL'
             ]
-        )
+        }
+        lf_client.grant_permissions(**args)
     except lf_client.exceptions.from_code('AlreadyExistsException'):
         pass
 
@@ -282,28 +278,32 @@ def accept_pending_lf_resource_share(ram_client, sender_account: str):
 
 def create_crawler(glue_client, crawler_role: str, database_name: str, table_name: str, s3_location: str,
                    sync_schedule: str, enable_lineage: bool = True):
-    glue_client.create_crawler(
-        Name='%s-%s' % (database_name, table_name),
-        Role=crawler_role,
-        DatabaseName=database_name,
-        Description="S3 Crawler to sync structure of %s.%s to Data Mesh" % (database_name, table_name),
-        Targets={
-            'S3Targets': [
-                {
-                    'Path': s3_location
-                },
-            ]
-        },
-        Schedule=sync_schedule,
-        SchemaChangePolicy={
-            'UpdateBehavior': 'LOG',
-            'DeleteBehavior': 'LOG'
-        },
-        RecrawlPolicy={
-            'RecrawlBehavior': 'CRAWL_NEW_FOLDERS_ONLY'
-        },
-        LineageConfiguration={
-            'CrawlerLineageSettings': 'ENABLE' if enable_lineage is True else 'DISABLE'
-        },
-        Tags=flatten_default_tags()
-    )
+    crawler_name = '%s-%s' % (database_name, table_name)
+    try:
+        glue_client.get_crawler(Name=crawler_name)
+    except glue_client.exceptions.from_code('EntityNotFoundException'):
+        glue_client.create_crawler(
+            Name=crawler_name,
+            Role=crawler_role,
+            DatabaseName=database_name,
+            Description="S3 Crawler to sync structure of %s.%s to Data Mesh" % (database_name, table_name),
+            Targets={
+                'S3Targets': [
+                    {
+                        'Path': s3_location
+                    },
+                ]
+            },
+            Schedule=sync_schedule,
+            SchemaChangePolicy={
+                'UpdateBehavior': 'LOG',
+                'DeleteBehavior': 'LOG'
+            },
+            RecrawlPolicy={
+                'RecrawlBehavior': 'CRAWL_NEW_FOLDERS_ONLY'
+            },
+            LineageConfiguration={
+                'CrawlerLineageSettings': 'ENABLE' if enable_lineage is True else 'DISABLE'
+            },
+            Tags=flatten_default_tags()
+        )

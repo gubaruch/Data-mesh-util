@@ -272,7 +272,6 @@ class DataMeshProducer:
 
         # generate the target database name for the mesh
         data_mesh_database_name = "%s-%s" % (source_database_name, current_account.get('Account'))
-        producer_account_resource_share_database = "%s-%s" % (source_database_name, DATA_MESH_DATABASE_NAME)
 
         # generate a reference to the current account data producer role arn
         producer_role_arn = utils.get_producer_role_arn(
@@ -283,8 +282,9 @@ class DataMeshProducer:
         data_mesh_account_id = data_mesh_sts_session.get('AssumedRoleUser').get('Arn').split(':')[4]
 
         # create clients for the current account and with the new credentials in the data mesh account
-        current_glue_client = boto3.client('glue', region_name=self._current_region)
-        current_ram_client = boto3.client('ram', region_name=self._current_region)
+        producer_glue_client = boto3.client('glue', region_name=self._current_region)
+        producer_lf_client = boto3.client('lakeformation', region_name=self._current_region)
+        producer_ram_client = boto3.client('ram', region_name=self._current_region)
         data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
                                                       credentials=data_mesh_sts_session.get('Credentials'))
         data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
@@ -292,7 +292,7 @@ class DataMeshProducer:
 
         # load the specified tables to be created as data products
         all_tables = self._load_glue_tables(
-            glue_client=current_glue_client,
+            glue_client=producer_glue_client,
             catalog_id=current_account.get('Account'),
             source_db_name=source_database_name,
             table_name_regex=table_name_regex
@@ -309,11 +309,15 @@ class DataMeshProducer:
 
         # get or create a data mesh shared database in the producer account
         utils.get_or_create_database(
-            glue_client=current_glue_client,
-            database_name=producer_account_resource_share_database,
+            glue_client=producer_glue_client,
+            database_name=data_mesh_database_name,
             database_desc="Database to contain objects objects shared with the Data Mesh Account",
             default_principal=producer_role_arn
         )
+
+        # grant the producer all permissions on this database
+        # utils.lf_grant_all(lf_client=producer_lf_client, principal=producer_role_arn,
+        #                    database_name=data_mesh_database_name)
 
         for table in all_tables:
             table_s3_path = table.get('StorageDescriptor').get('Location')
@@ -323,7 +327,7 @@ class DataMeshProducer:
                 table_def=table,
                 data_mesh_glue_client=data_mesh_glue_client,
                 data_mesh_lf_client=data_mesh_lf_client,
-                producer_ram_client=current_ram_client,
+                producer_ram_client=producer_ram_client,
                 data_mesh_producer_role_arn=data_mesh_producer_role_arn,
                 data_mesh_database_name=data_mesh_database_name,
                 producer_account_id=current_account.get('Account'),
@@ -332,8 +336,8 @@ class DataMeshProducer:
 
             if sync_mesh_catalog_schedule is not None:
                 utils.create_crawler(
-                    glue_client=current_glue_client,
-                    database_name=producer_account_resource_share_database,
+                    glue_client=producer_glue_client,
+                    database_name=data_mesh_database_name,
                     table_name=created_table,
                     s3_location=table_s3_path,
                     crawler_role=sync_mesh_crawler_role_arn,
