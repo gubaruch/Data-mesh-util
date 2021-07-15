@@ -165,7 +165,7 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
     iam_client.attach_group_policy(GroupName=("%sGroup" % role_name), PolicyArn=policy_arn)
 
     # TODO Grant permissions for IamAllowedPrincipals to SUPER for this Account
-    return role_arn
+    return role_arn, user_arn, group_arn
 
 
 def flatten_default_tags():

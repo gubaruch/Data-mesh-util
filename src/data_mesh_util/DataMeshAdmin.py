@@ -1,6 +1,7 @@
 import boto3
 import os
 import sys
+import logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "resource"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
@@ -17,11 +18,13 @@ class DataMeshAdmin:
     _lf_client = None
     _sts_client = None
     _config = {}
+    _logger = logging.getLogger("DataMeshAdmin")
 
-    def __init__(self):
+    def __init__(self, log_level: str = "INFO"):
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
         self._lf_client = boto3.client('lakeformation')
+        self._logger.setLevel(log_level)
 
     def _create_template_config(self, config: dict):
         if config is None:
@@ -37,6 +40,8 @@ class DataMeshAdmin:
         if "consumer_account_id" not in config:
             config["consumer_account_id"] = self._data_consumer_account_id
 
+        self._logger.debug(self._config)
+
     def _create_data_mesh_manager_role(self):
         '''
         Private method to create objects needed for an administrative role that can be used to grant access to Data Mesh roles
@@ -45,8 +50,9 @@ class DataMeshAdmin:
         self._create_template_config(self._config)
 
         current_identity = self._sts_client.get_caller_identity()
+        self._logger.debug("Running as %s" % str(current_identity))
 
-        iam_config = utils.configure_iam(
+        mgr_tuple = utils.configure_iam(
             iam_client=self._iam_client,
             policy_name='DataMeshManagerPolicy',
             policy_desc='IAM Policy to bootstrap the Data Mesh Admin',
@@ -55,20 +61,26 @@ class DataMeshAdmin:
             role_desc='Role to be used for the Data Mesh Manager function',
             account_id=self._data_mesh_account_id,
             config=self._config)
+        data_mesh_mgr_role_arn = mgr_tuple[0]
+
+        self._logger.info("Validated Data Mesh Manager Role %s" % data_mesh_mgr_role_arn)
 
         # remove default IAM settings in lakeformation for the account, and setup the manager role and this caller as admins
         response = self._lf_client.put_data_lake_settings(
             DataLakeSettings={
                 "DataLakeAdmins": [
-                    {"DataLakePrincipalIdentifier": iam_config},
+                    {"DataLakePrincipalIdentifier": data_mesh_mgr_role_arn},
                     # add the current caller identity as an admin
                     {"DataLakePrincipalIdentifier": current_identity.get('Arn')}
                 ],
                 'CreateTableDefaultPermissions': []
             }
         )
+        self._logger.info(
+            "Removed default data lake settings for Account %s. New Admins are %s and Data Mesh Manager" % (
+                current_identity.get('Account'), current_identity.get('Arn')))
 
-        return iam_config
+        return mgr_tuple
 
     def _create_producer_role(self):
         '''
@@ -78,7 +90,7 @@ class DataMeshAdmin:
         self._create_template_config(self._config)
 
         # create the policy and role to be used for data producers
-        iam_role = utils.configure_iam(
+        producer_tuple = utils.configure_iam(
             iam_client=self._iam_client,
             policy_name='DataMeshProducerPolicy',
             policy_desc='IAM Role enabling Accounts to become Data Producers',
@@ -87,11 +99,14 @@ class DataMeshAdmin:
             role_desc='Role to be used for all Data Mesh Producer Accounts',
             account_id=self._data_mesh_account_id,
             config=self._config)
+        producer_iam_role_arn = producer_tuple[0]
+
+        self._logger.info("Validated Data Mesh Producer Role %s" % producer_iam_role_arn)
 
         # grant this role the ability to create databases and tables
         response = self._lf_client.grant_permissions(
             Principal={
-                'DataLakePrincipalIdentifier': iam_role
+                'DataLakePrincipalIdentifier': producer_iam_role_arn
             },
             Resource={'Catalog': {}},
             Permissions=[
@@ -101,8 +116,9 @@ class DataMeshAdmin:
                 'CREATE_DATABASE'
             ]
         )
+        self._logger.info("Granted Data Mesh Producer CREATE_DATABASE privileges on Catalog")
 
-        return iam_role
+        return producer_tuple
 
     def _create_consumer_role(self):
         '''
@@ -121,6 +137,13 @@ class DataMeshAdmin:
             account_id=self._data_mesh_account_id,
             config=self._config)
 
+    def _api_tuple(self, item_tuple: tuple):
+        return {
+            "RoleArn": item_tuple[0],
+            "UserArn": item_tuple[1],
+            "GroupArn": item_tuple[2]
+        }
+
     def initialize_mesh_account(self):
         '''
         Sets up an AWS Account to act as a Data Mesh central account. This method should be invoked by an Administrator
@@ -130,23 +153,29 @@ class DataMeshAdmin:
         self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
 
         # create a new IAM role in the Data Mesh Account to be used for future grants
-        self._create_data_mesh_manager_role()
+        mgr_tuple = self._create_data_mesh_manager_role()
 
         # create the producer role
-        producer_role = self._create_producer_role()
+        producer_tuple = self._create_producer_role()
 
         # create the consumer role
-        consumer_role = self._create_consumer_role()
+        consumer_tuple = self._create_consumer_role()
 
-        return (self._data_mesh_manager_role_arn, producer_role, consumer_role)
+        return {
+            "Manager": self._api_tuple(mgr_tuple),
+            "ProducerAdmin": self._api_tuple(producer_tuple),
+            "ConsumerAdmin": self._api_tuple(consumer_tuple)
+        }
 
     def enable_account_as_producer(self, account_id: str):
         '''
         Enables a remote account to act as a data producer by granting them access to the DataMeshAdminProducer Role
         :return:
         '''
-        self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
+        if utils.validate_correct_account(self._iam_client, DATA_MESH_ADMIN_PRODUCER_ROLENAME) is False:
+            raise Exception("Must be run in the Data Mesh Account")
 
         # create trust relationships for the AdminProducer roles
         utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
                                     role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+        self._logger.info("Enabled Account %s to assume %s" % (account_id, DATA_MESH_ADMIN_PRODUCER_ROLENAME))

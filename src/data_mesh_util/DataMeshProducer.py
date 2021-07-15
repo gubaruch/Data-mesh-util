@@ -70,11 +70,11 @@ class DataMeshProducer:
         :param s3_bucket:
         :return:
         '''
-        self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
-
         # validate that we are being run within the correct account
         if utils.validate_correct_account(self._iam_client, DATA_MESH_PRODUCER_ROLENAME) is False:
             raise Exception("Function should be run in the Data Domain Producer Account")
+
+        self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
 
         # get the producer policy
         arn = "arn:aws:iam::%s:policy%s%s" % (
@@ -306,6 +306,10 @@ class DataMeshProducer:
                 current_account.get('Account'), source_database_name)
             , default_principal=data_mesh_producer_role_arn
         )
+
+        # grant the data mesh admin producer all permissions on this database
+        utils.lf_grant_all(lf_client=data_mesh_lf_client, principal=data_mesh_producer_role_arn,
+                           database_name=data_mesh_database_name)
 
         # get or create a data mesh shared database in the producer account
         utils.get_or_create_database(
