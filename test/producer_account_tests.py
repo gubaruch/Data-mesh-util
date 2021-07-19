@@ -5,7 +5,7 @@ import logging
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
-PRODUCER_ROLE_ARN = "arn:aws:iam::887210671223:role/AwsDataMesh/DataMeshAdminProducer"
+MESH_ACCOUNT = '887210671223'
 
 
 class DataMeshProducerAccountTests(unittest.TestCase):
@@ -14,7 +14,7 @@ class DataMeshProducerAccountTests(unittest.TestCase):
     def test_setup_producer_iam_role(self):
         self.mgr.initialize_producer_account(
             s3_bucket="org-1-data",
-            data_mesh_producer_role_arn=PRODUCER_ROLE_ARN
+            data_mesh_account_id=MESH_ACCOUNT
         )
 
     def test_enable_future_sharing(self):
@@ -28,7 +28,7 @@ class DataMeshProducerAccountTests(unittest.TestCase):
 
     def test_create_data_product(self):
         self.mgr.create_data_products(
-            data_mesh_producer_role_arn=PRODUCER_ROLE_ARN,
+            data_mesh_account_id=MESH_ACCOUNT,
             source_database_name='tpcds',
             table_name_regex='customer',
             sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",

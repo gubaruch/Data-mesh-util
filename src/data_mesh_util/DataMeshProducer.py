@@ -1,17 +1,17 @@
 import datetime
 import time
-
 import boto3
 import os
 import sys
+import json
+import shortuuid
+import logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "resource"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
-import json
-import shortuuid
+
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
-import logging
 
 
 class DataMeshProducer:
@@ -37,27 +37,28 @@ class DataMeshProducer:
 
         self._logger.setLevel(log_level)
 
-    def _check_acct(self):
+    def _check_acct(self, override_acct: str = None):
         # validate that we are being run within the correct account
-        if utils.validate_correct_account(self._iam_client, DATA_MESH_PRODUCER_ROLENAME) is False:
+        if utils.validate_correct_account(self._iam_client,
+                                          DATA_MESH_PRODUCER_ROLENAME if override_acct is None else override_acct) is False:
             raise Exception("Function should be run in the Data Domain Producer Account")
 
-    def initialize_producer_account(self, s3_bucket: str, data_mesh_producer_role_arn: str):
+    def initialize_producer_account(self, s3_bucket: str, data_mesh_account_id: str):
         '''
         Sets up an AWS Account to act as a Data Provider into the central Data Mesh Account. This method should be invoked
         by an Administrator of the Producer Account. Creates IAM Role & Policy to get and put restricted S3 Bucket Policies.
         Requires at least 1 S3 Bucket Policy be enabled for future grants.
         :return:
         '''
-        self._check_acct()
-
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
         self._logger.info("Setting up Account %s as a Data Producer" % self._data_producer_account_id)
 
+        data_mesh_producer_role_arn = utils.get_datamesh_producer_role_arn(data_mesh_account_id)
+
         # setup the producer IAM role
-        utils.configure_iam(
+        producer_iam = utils.configure_iam(
             iam_client=self._iam_client,
-            policy_name=PRODUCER_S3_POLICY_NAME,
+            policy_name=PRODUCER_POLICY_NAME,
             policy_desc='IAM Policy enabling Accounts to get and put restricted S3 Bucket Policies',
             policy_template="producer_access_catalog.pystache",
             role_name=DATA_MESH_PRODUCER_ROLENAME,
@@ -80,6 +81,8 @@ class DataMeshProducer:
         self._iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
         self._logger.info("Attached Policy to Group %s" % group_name)
 
+        return producer_iam
+
     def enable_future_sharing(self, s3_bucket: str):
         '''
         Adds a Bucket and Prefix to the policy document for the DataProducer Role, which will enable the Role to potentially
@@ -94,7 +97,7 @@ class DataMeshProducer:
 
         # get the producer policy
         arn = "arn:aws:iam::%s:policy%s%s" % (
-            self._data_producer_account_id, DATA_MESH_IAM_PATH, PRODUCER_S3_POLICY_NAME)
+            self._data_producer_account_id, DATA_MESH_IAM_PATH, PRODUCER_POLICY_NAME)
         policy_version = self._iam_client.get_policy(PolicyArn=arn).get('Policy').get('DefaultVersionId')
         policy_doc = self._iam_client.get_policy_version(PolicyArn=arn, VersionId=policy_version).get(
             'PolicyVersion').get(
@@ -296,7 +299,7 @@ class DataMeshProducer:
         self._logger.info("Loaded %s tables matching description from Glue" % len(all_tables))
         return all_tables
 
-    def create_data_products(self, data_mesh_producer_role_arn: str, source_database_name: str,
+    def create_data_products(self, data_mesh_account_id: str, source_database_name: str,
                              table_name_regex: str = None, sync_mesh_catalog_schedule: str = None,
                              sync_mesh_crawler_role_arn: str = None):
         '''
@@ -311,6 +314,7 @@ class DataMeshProducer:
         self._check_acct()
 
         # assume the data mesh admin producer role. if this fails, then the requesting identity is wrong
+        data_mesh_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=data_mesh_account_id)
         current_account = self._sts_client.get_caller_identity()
         session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
             'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
@@ -322,17 +326,8 @@ class DataMeshProducer:
         # generate the target database name for the mesh
         data_mesh_database_name = "%s-%s" % (source_database_name, current_account.get('Account'))
 
-        # generate a reference to the current account data producer role arn
-        producer_role_arn = utils.get_producer_role_arn(
-            account_id=current_account.get('Account')
-        )
-
-        # parse what the data mesh account ID is for later use
-        data_mesh_account_id = data_mesh_sts_session.get('AssumedRoleUser').get('Arn').split(':')[4]
-
         # create clients for the current account and with the new credentials in the data mesh account
         producer_glue_client = boto3.client('glue', region_name=self._current_region)
-        producer_lf_client = boto3.client('lakeformation', region_name=self._current_region)
         producer_ram_client = boto3.client('ram', region_name=self._current_region)
         data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
                                                       credentials=data_mesh_sts_session.get('Credentials'))
@@ -356,8 +351,8 @@ class DataMeshProducer:
         )
         self._logger.info("Validated Data Mesh Database %s" % data_mesh_database_name)
 
-        # grant the data mesh admin producer permissions to create tables on this database
-        utils.lf_grant_permissions(lf_client=producer_lf_client, principal=current_account.get('Account'),
+        # grant the producer permissions to create tables on this database
+        utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal=current_account.get('Account'),
                                    database_name=data_mesh_database_name, permissions=['CREATE_TABLE', 'DESCRIBE'],
                                    grantable_permissions=None, logger=self._logger)
         self._logger.info("Granted access on Database %s to Producer" % data_mesh_database_name)

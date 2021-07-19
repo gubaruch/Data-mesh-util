@@ -181,3 +181,16 @@ class DataMeshAdmin:
         utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
                                     role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
         self._logger.info("Enabled Account %s to assume %s" % (account_id, DATA_MESH_ADMIN_PRODUCER_ROLENAME))
+
+    def enable_account_as_consumer(self, account_id: str):
+        '''
+        Enables a remote account to act as a data producer by granting them access to the DataMeshAdminProducer Role
+        :return:
+        '''
+        if utils.validate_correct_account(self._iam_client, DATA_MESH_ADMIN_PRODUCER_ROLENAME) is False:
+            raise Exception("Must be run in the Data Mesh Account")
+
+        # create trust relationships for the AdminProducer roles
+        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
+                                    role_name=DATA_MESH_ADMIN_CONSUMER_ROLENAME)
+        self._logger.info("Enabled Account %s to assume %s" % (account_id, DATA_MESH_ADMIN_CONSUMER_ROLENAME))

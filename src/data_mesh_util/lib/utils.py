@@ -195,7 +195,7 @@ def get_or_create_database(glue_client, database_name: str, database_desc: str):
         )
 
 
-def create_assume_role_policy(iam_client, account_id, policy_name, role_arn):
+def create_assume_role_policy(iam_client, account_id: str, policy_name: str, role_arn: str):
     # create a policy that lets someone assume this new role
     policy_arn = None
     try:
@@ -213,12 +213,24 @@ def create_assume_role_policy(iam_client, account_id, policy_name, role_arn):
     return policy_arn
 
 
+def _get_role_arn(account_id: str, role_name: str):
+    return "arn:aws:iam::%s:role%s%s" % (account_id, DATA_MESH_IAM_PATH, role_name)
+
+
 def get_producer_role_arn(account_id: str):
-    return "arn:aws:iam::%s:role%s%s" % (account_id, DATA_MESH_IAM_PATH, DATA_MESH_PRODUCER_ROLENAME)
+    return _get_role_arn(account_id, DATA_MESH_PRODUCER_ROLENAME)
+
+
+def get_consumer_role_arn(account_id: str):
+    return _get_role_arn(account_id, DATA_MESH_CONSUMER_ROLENAME)
 
 
 def get_datamesh_producer_role_arn(account_id: str):
-    return "arn:aws:iam::%s:role%s%s" % (account_id, DATA_MESH_IAM_PATH, DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+    return _get_role_arn(account_id, DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+
+
+def get_datamesh_consumer_role_arn(account_id: str):
+    return _get_role_arn(account_id, DATA_MESH_ADMIN_CONSUMER_ROLENAME)
 
 
 def generate_client(service: str, region: str, credentials: dict):
