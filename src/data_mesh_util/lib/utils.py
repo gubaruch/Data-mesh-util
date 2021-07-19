@@ -176,7 +176,7 @@ def flatten_default_tags():
     return output
 
 
-def get_or_create_database(glue_client, database_name: str, database_desc: str, default_principal: str):
+def get_or_create_database(glue_client, database_name: str, database_desc: str):
     database_exists = None
     try:
         database_exists = glue_client.get_database(
@@ -227,7 +227,9 @@ def generate_client(service: str, region: str, credentials: dict):
                         aws_session_token=credentials.get('SessionToken'))
 
 
-def lf_grant_all(lf_client, principal: str, database_name: str, table_name: str = None):
+def lf_grant_permissions(lf_client, principal: str, database_name: str, table_name: str = None,
+                         permissions: list = ['ALL'],
+                         grantable_permissions: list = ['ALL']):
     try:
         # grant all permissions to the producer account for the resource link
         table_spec = {
@@ -246,13 +248,12 @@ def lf_grant_all(lf_client, principal: str, database_name: str, table_name: str 
                 'Table': table_spec
             },
             # producer role for this linked table has full rights on the Data Mesh Object
-            "Permissions": [
-                'ALL'
-            ],
-            "PermissionsWithGrantOption": [
-                'ALL'
-            ]
+            "Permissions": permissions
         }
+
+        if grantable_permissions is not None:
+            args["PermissionsWithGrantOption"] = grantable_permissions
+
         lf_client.grant_permissions(**args)
     except lf_client.exceptions.from_code('AlreadyExistsException'):
         pass

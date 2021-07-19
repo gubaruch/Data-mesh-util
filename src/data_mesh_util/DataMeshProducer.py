@@ -171,7 +171,7 @@ class DataMeshProducer:
         return t
 
     def create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
-                          data_mesh_producer_role_arn: str, data_mesh_database_name: str, producer_account_id: str,
+                          producer_glue_client: str, data_mesh_database_name: str, producer_account_id: str,
                           data_mesh_account_id: str):
         # cleanup the TableInfo object to be usable as a TableInput
         t = self._cleanup_table_def(table_def)
@@ -187,33 +187,32 @@ class DataMeshProducer:
         except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
             pass
 
-        utils.lf_grant_all(lf_client=data_mesh_lf_client, principal=data_mesh_producer_role_arn,
-                           database_name=data_mesh_database_name, table_name=table_name)
+        # grant access to the producer account
+        perms = ['SELECT', 'ALTER', 'INSERT', 'DESCRIBE']
+        utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal=producer_account_id,
+                                   database_name=data_mesh_database_name, table_name=table_name, permissions=perms,
+                                   grantable_permissions=perms)
 
-        # create a resource link for the data mesh table into the producer account
+        # in the producer account, accept the RAM share after 1 second - seems to be an async delay
+        time.sleep(1)
+        utils.accept_pending_lf_resource_share(ram_client=producer_ram_client, sender_account=data_mesh_account_id)
+
+        # create a resource link for the data mesh table in producer account
         link_table_name = "%s_link" % table_name
         try:
-            data_mesh_glue_client.create_table(
+            producer_glue_client.create_table(
                 DatabaseName=data_mesh_database_name,
                 TableInput={"Name": link_table_name,
-                            "TargetTable": {"CatalogId": producer_account_id,
+                            "TargetTable": {"CatalogId": data_mesh_account_id,
                                             "DatabaseName": data_mesh_database_name,
                                             "Name": table_name
                                             }
                             }
             )
-
-            # grant required permissions to the producer account for the resource link
-            utils.lf_grant_all(lf_client=data_mesh_lf_client, principal=producer_account_id,
-                               database_name=data_mesh_database_name, table_name=link_table_name)
-
-            # in the producer account, accept the RAM share after 1 second - seems to be an async delay
-            time.sleep(1)
-            utils.accept_pending_lf_resource_share(ram_client=producer_ram_client, sender_account=data_mesh_account_id)
-        except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
+        except producer_glue_client.exceptions.from_code('AlreadyExistsException'):
             pass
 
-        return link_table_name
+        return table_name, link_table_name
 
     def _load_glue_tables(self, glue_client, catalog_id: str, source_db_name: str, table_name_regex: str):
         # get the tables which are included in the set provided through args
@@ -304,24 +303,19 @@ class DataMeshProducer:
             database_name=data_mesh_database_name,
             database_desc="Database to contain objects from Source Database %s.%s" % (
                 current_account.get('Account'), source_database_name)
-            , default_principal=data_mesh_producer_role_arn
         )
 
-        # grant the data mesh admin producer all permissions on this database
-        utils.lf_grant_all(lf_client=data_mesh_lf_client, principal=data_mesh_producer_role_arn,
-                           database_name=data_mesh_database_name)
+        # grant the data mesh admin producer permissions to create tables on this database
+        utils.lf_grant_permissions(lf_client=producer_lf_client, principal=current_account.get('Account'),
+                                   database_name=data_mesh_database_name, permissions=['CREATE_TABLE', 'DESCRIBE'],
+                                   grantable_permissions=None)
 
         # get or create a data mesh shared database in the producer account
         utils.get_or_create_database(
             glue_client=producer_glue_client,
             database_name=data_mesh_database_name,
             database_desc="Database to contain objects objects shared with the Data Mesh Account",
-            default_principal=producer_role_arn
         )
-
-        # grant the producer all permissions on this database
-        # utils.lf_grant_all(lf_client=producer_lf_client, principal=producer_role_arn,
-        #                    database_name=data_mesh_database_name)
 
         for table in all_tables:
             table_s3_path = table.get('StorageDescriptor').get('Location')
@@ -332,7 +326,7 @@ class DataMeshProducer:
                 data_mesh_glue_client=data_mesh_glue_client,
                 data_mesh_lf_client=data_mesh_lf_client,
                 producer_ram_client=producer_ram_client,
-                data_mesh_producer_role_arn=data_mesh_producer_role_arn,
+                producer_glue_client=producer_glue_client,
                 data_mesh_database_name=data_mesh_database_name,
                 producer_account_id=current_account.get('Account'),
                 data_mesh_account_id=data_mesh_account_id
