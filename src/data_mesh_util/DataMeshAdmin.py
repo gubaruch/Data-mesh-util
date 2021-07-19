@@ -19,6 +19,8 @@ class DataMeshAdmin:
     _sts_client = None
     _config = {}
     _logger = logging.getLogger("DataMeshAdmin")
+    stream_handler = logging.StreamHandler(sys.stdout)
+    _logger.addHandler(stream_handler)
 
     def __init__(self, log_level: str = "INFO"):
         self._iam_client = boto3.client('iam')

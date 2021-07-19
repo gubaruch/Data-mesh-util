@@ -1,6 +1,7 @@
 import unittest
 from data_mesh_util import DataMeshProducer as dmp
 import warnings
+import logging
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
@@ -8,7 +9,7 @@ PRODUCER_ROLE_ARN = "arn:aws:iam::887210671223:role/AwsDataMesh/DataMeshAdminPro
 
 
 class DataMeshProducerAccountTests(unittest.TestCase):
-    mgr = dmp.DataMeshProducer()
+    mgr = dmp.DataMeshProducer(log_level=logging.DEBUG)
 
     def test_setup_producer_iam_role(self):
         self.mgr.initialize_producer_account(

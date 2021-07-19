@@ -11,6 +11,7 @@ import json
 import shortuuid
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
+import logging
 
 
 class DataMeshProducer:
@@ -22,14 +23,24 @@ class DataMeshProducer:
     _sts_client = None
     _config = {}
     _current_region = None
+    _logger = logging.getLogger("DataMeshProducer")
+    stream_handler = logging.StreamHandler(sys.stdout)
+    _logger.addHandler(stream_handler)
 
-    def __init__(self):
+    def __init__(self, log_level: str = "INFO"):
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
         self._current_region = os.getenv('AWS_REGION')
 
         if self._current_region is None:
             raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
+
+        self._logger.setLevel(log_level)
+
+    def _check_acct(self):
+        # validate that we are being run within the correct account
+        if utils.validate_correct_account(self._iam_client, DATA_MESH_PRODUCER_ROLENAME) is False:
+            raise Exception("Function should be run in the Data Domain Producer Account")
 
     def initialize_producer_account(self, s3_bucket: str, data_mesh_producer_role_arn: str):
         '''
@@ -38,7 +49,10 @@ class DataMeshProducer:
         Requires at least 1 S3 Bucket Policy be enabled for future grants.
         :return:
         '''
+        self._check_acct()
+
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
+        self._logger.info("Setting up Account %s as a Data Producer" % self._data_producer_account_id)
 
         # setup the producer IAM role
         utils.configure_iam(
@@ -59,9 +73,12 @@ class DataMeshProducer:
             policy_name=policy_name,
             role_arn=data_mesh_producer_role_arn
         )
+        self._logger.info("Created new IAM Policy %s" % policy_arn)
 
         # now let the group assume the cross account role
-        self._iam_client.attach_group_policy(GroupName=("%sGroup" % DATA_MESH_PRODUCER_ROLENAME), PolicyArn=policy_arn)
+        group_name = "%sGroup" % DATA_MESH_PRODUCER_ROLENAME
+        self._iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
+        self._logger.info("Attached Policy to Group %s" % group_name)
 
     def enable_future_sharing(self, s3_bucket: str):
         '''
@@ -70,11 +87,10 @@ class DataMeshProducer:
         :param s3_bucket:
         :return:
         '''
-        # validate that we are being run within the correct account
-        if utils.validate_correct_account(self._iam_client, DATA_MESH_PRODUCER_ROLENAME) is False:
-            raise Exception("Function should be run in the Data Domain Producer Account")
+        self._check_acct()
 
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
+        self._logger.info("Class bound to Account %s" % self._data_producer_account_id)
 
         # get the producer policy
         arn = "arn:aws:iam::%s:policy%s%s" % (
@@ -83,6 +99,8 @@ class DataMeshProducer:
         policy_doc = self._iam_client.get_policy_version(PolicyArn=arn, VersionId=policy_version).get(
             'PolicyVersion').get(
             'Document')
+        self._logger.debug("Current S3 Bucket Policy")
+        self._logger.debug(policy_doc)
 
         # update the policy to enable PutBucketPolicy on the bucket
         resources = policy_doc.get('Statement')[0].get('Resource')
@@ -92,15 +110,19 @@ class DataMeshProducer:
         if bucket_arn not in resources:
             resources.append(bucket_arn)
             policy_doc.get('Statement')[0]['Resource'] = resources
+
+            self._logger.debug("Updated S3 Bucket Policy")
+            self._logger.debug(policy_doc)
+
             self._iam_client.create_policy_version(PolicyArn=arn, PolicyDocument=json.dumps(policy_doc),
                                                    SetAsDefault=True)
+        else:
+            self._logger.info("No Action Required. Bucket access already enabled.")
 
     def grant_datamesh_access_to_s3(self, s3_bucket: str, data_mesh_account_id: str):
+        self._check_acct()
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
-
-        # validate that we are being run within the correct account
-        if utils.validate_correct_account(self._iam_client, DATA_MESH_PRODUCER_ROLENAME) is False:
-            raise Exception("Function should be run in the Data Domain Producer Account")
+        self._logger.info("Class bound to Account %s" % self._data_producer_account_id)
 
         s3_client = boto3.client('s3')
         get_bucket_policy_response = None
@@ -112,6 +134,7 @@ class DataMeshProducer:
 
         # need to grant bucket access to the producer admin role
         data_mesh_producer_role_arn = utils.get_datamesh_producer_role_arn(data_mesh_account_id)
+        self._logger.info("Will grant S3 access to %s" % data_mesh_producer_role_arn)
 
         # generate a new statement for the target bucket policy
         statement_sid = "ReadOnly-%s-%s" % (s3_bucket, data_mesh_producer_role_arn)
@@ -122,6 +145,8 @@ class DataMeshProducer:
         statement = json.loads(utils.generate_policy(template_file="producer_bucket_policy.pystache", config=conf))
 
         if get_bucket_policy_response is None or get_bucket_policy_response.get('Policy') is None:
+            self._logger.info("Will create new S3 Bucket Policy")
+
             bucket_policy = {
                 "Id": "Policy%s" % shortuuid.uuid(),
                 "Version": "2012-10-17",
@@ -130,6 +155,9 @@ class DataMeshProducer:
                 ]
             }
 
+            self._logger.debug("New Bucket Policy")
+            self._logger.debug(bucket_policy)
+
             s3_client.put_bucket_policy(
                 Bucket=s3_bucket,
                 ConfirmRemoveSelfBucketAccess=False,
@@ -137,6 +165,8 @@ class DataMeshProducer:
                 ExpectedBucketOwner=self._data_producer_account_id
             )
         else:
+            self._logger.info("Will update existing Bucket Policy")
+
             bucket_policy = json.loads(get_bucket_policy_response.get('Policy'))
             sid_exists = False
             for s in bucket_policy.get('Statement'):
@@ -144,8 +174,13 @@ class DataMeshProducer:
                     sid_exists = True
 
             if sid_exists is False:
+                self._logger.info("Adding new Statement for s3 Access")
+
                 # add a statement that allows the data mesh admin producer read-only access
                 bucket_policy.get('Statement').append(statement)
+
+                self._logger.debug("New S3 Bucket Policy")
+                self._logger.debug(bucket_policy)
 
                 s3_client.put_bucket_policy(
                     Bucket=s3_bucket,
@@ -153,6 +188,8 @@ class DataMeshProducer:
                     Policy=json.dumps(bucket_policy),
                     ExpectedBucketOwner=self._data_producer_account_id
                 )
+            else:
+                self._logger.info("No Grant Required. Statement already exists in Policy")
 
     def _cleanup_table_def(self, table_def: dict):
         t = table_def.copy()
@@ -173,8 +210,13 @@ class DataMeshProducer:
     def create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
                           producer_glue_client: str, data_mesh_database_name: str, producer_account_id: str,
                           data_mesh_account_id: str):
+        self._check_acct()
+
         # cleanup the TableInfo object to be usable as a TableInput
         t = self._cleanup_table_def(table_def)
+
+        self._logger.debug("Existing Table Definition")
+        self._logger.debug(t)
 
         table_name = t.get('Name')
 
@@ -184,18 +226,20 @@ class DataMeshProducer:
                 DatabaseName=data_mesh_database_name,
                 TableInput=t
             )
+            self._logger.info("Created new Glue Table")
         except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
-            pass
+            self._logger.info("Glue Table Already Exists")
 
         # grant access to the producer account
         perms = ['SELECT', 'ALTER', 'INSERT', 'DESCRIBE']
         utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal=producer_account_id,
                                    database_name=data_mesh_database_name, table_name=table_name, permissions=perms,
-                                   grantable_permissions=perms)
+                                   grantable_permissions=perms, logger=self._logger)
 
         # in the producer account, accept the RAM share after 1 second - seems to be an async delay
         time.sleep(1)
-        utils.accept_pending_lf_resource_share(ram_client=producer_ram_client, sender_account=data_mesh_account_id)
+        utils.accept_pending_lf_resource_share(ram_client=producer_ram_client, sender_account=data_mesh_account_id,
+                                               logger=self._logger)
 
         # create a resource link for the data mesh table in producer account
         link_table_name = "%s_link" % table_name
@@ -209,8 +253,9 @@ class DataMeshProducer:
                                             }
                             }
             )
+            self._logger.info("Created Resource Link Table")
         except producer_glue_client.exceptions.from_code('AlreadyExistsException'):
-            pass
+            self._logger.info("Resource Link Table Already Exists")
 
         return table_name, link_table_name
 
@@ -248,6 +293,7 @@ class DataMeshProducer:
             else:
                 all_tables.extend(get_table_response.get('TableList'))
 
+        self._logger.info("Loaded %s tables matching description from Glue" % len(all_tables))
         return all_tables
 
     def create_data_products(self, data_mesh_producer_role_arn: str, source_database_name: str,
@@ -262,12 +308,16 @@ class DataMeshProducer:
         :param table_name_regex:
         :return:
         '''
+        self._check_acct()
+
         # assume the data mesh admin producer role. if this fails, then the requesting identity is wrong
         current_account = self._sts_client.get_caller_identity()
         session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
             'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
         data_mesh_sts_session = self._sts_client.assume_role(RoleArn=data_mesh_producer_role_arn,
                                                              RoleSessionName=session_name)
+        self._logger.debug("Created new STS Session for Data Mesh Admin Producer")
+        self._logger.debug(data_mesh_sts_session)
 
         # generate the target database name for the mesh
         data_mesh_database_name = "%s-%s" % (source_database_name, current_account.get('Account'))
@@ -304,11 +354,13 @@ class DataMeshProducer:
             database_desc="Database to contain objects from Source Database %s.%s" % (
                 current_account.get('Account'), source_database_name)
         )
+        self._logger.info("Validated Data Mesh Database %s" % data_mesh_database_name)
 
         # grant the data mesh admin producer permissions to create tables on this database
         utils.lf_grant_permissions(lf_client=producer_lf_client, principal=current_account.get('Account'),
                                    database_name=data_mesh_database_name, permissions=['CREATE_TABLE', 'DESCRIBE'],
-                                   grantable_permissions=None)
+                                   grantable_permissions=None, logger=self._logger)
+        self._logger.info("Granted access on Database %s to Producer" % data_mesh_database_name)
 
         # get or create a data mesh shared database in the producer account
         utils.get_or_create_database(
@@ -316,6 +368,7 @@ class DataMeshProducer:
             database_name=data_mesh_database_name,
             database_desc="Database to contain objects objects shared with the Data Mesh Account",
         )
+        self._logger.info("Validated Producer Account Database %s" % data_mesh_database_name)
 
         for table in all_tables:
             table_s3_path = table.get('StorageDescriptor').get('Location')
@@ -333,7 +386,7 @@ class DataMeshProducer:
             )
 
             if sync_mesh_catalog_schedule is not None:
-                utils.create_crawler(
+                glue_crawler = utils.create_crawler(
                     glue_client=producer_glue_client,
                     database_name=data_mesh_database_name,
                     table_name=created_table,
@@ -341,3 +394,4 @@ class DataMeshProducer:
                     crawler_role=sync_mesh_crawler_role_arn,
                     sync_schedule=sync_mesh_catalog_schedule
                 )
+                self._logger.info("Created new Glue Crawler %s" % glue_crawler)

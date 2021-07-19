@@ -227,7 +227,7 @@ def generate_client(service: str, region: str, credentials: dict):
                         aws_session_token=credentials.get('SessionToken'))
 
 
-def lf_grant_permissions(lf_client, principal: str, database_name: str, table_name: str = None,
+def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, table_name: str = None,
                          permissions: list = ['ALL'],
                          grantable_permissions: list = ['ALL']):
     try:
@@ -254,12 +254,14 @@ def lf_grant_permissions(lf_client, principal: str, database_name: str, table_na
         if grantable_permissions is not None:
             args["PermissionsWithGrantOption"] = grantable_permissions
 
+        logger.debug(args)
+
         lf_client.grant_permissions(**args)
     except lf_client.exceptions.from_code('AlreadyExistsException'):
         pass
 
 
-def accept_pending_lf_resource_share(ram_client, sender_account: str):
+def accept_pending_lf_resource_share(logger, ram_client, sender_account: str):
     accepted_one = False
     get_response = ram_client.get_resource_share_invitations(
     )
@@ -272,6 +274,7 @@ def accept_pending_lf_resource_share(ram_client, sender_account: str):
                 resourceShareInvitationArn=r.get('resourceShareInvitationArn')
             )
             accepted_one = True
+            logger.info("Accepted RAM Share")
 
     if accepted_one is False:
         raise Exception("No Available RAM Shares to Accept")
@@ -308,3 +311,5 @@ def create_crawler(glue_client, crawler_role: str, database_name: str, table_nam
             },
             Tags=flatten_default_tags()
         )
+
+    return crawler_name

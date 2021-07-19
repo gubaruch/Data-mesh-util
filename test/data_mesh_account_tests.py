@@ -12,7 +12,7 @@ class DataMeshAdminAccountTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._mgr = dmu.DataMeshAdmin()
+        cls._mgr = dmu.DataMeshAdmin(log_level=logging.DEBUG)
 
     def test_setup_data_mesh_account(self):
         output = self._mgr.initialize_mesh_account()
