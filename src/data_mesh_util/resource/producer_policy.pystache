@@ -62,6 +62,20 @@
                 "ram:CreateResourceShare"
             ],
             "Resource": "*"
+        },
+        {
+            "Sid": "DynamoDb1",
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:BatchGetItem",
+                "dynamodb:Query",
+                "dynamodb:Scan",
+                "dynamodb:UpdateItem"
+            ],
+            "Resource": [
+                "arn:aws:dynamodb:::table/AwsDataMeshSubscribers"
+            ]
         }
     ]
 }
