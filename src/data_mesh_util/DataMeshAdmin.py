@@ -7,9 +7,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "resource"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
+from data_mesh_util.lib.SubscriberTracker import SubscriberTracker
 
 
 class DataMeshAdmin:
+    _region = None
     _data_mesh_account_id = None
     _data_producer_account_id = None
     _data_consumer_account_id = None
@@ -17,15 +19,29 @@ class DataMeshAdmin:
     _iam_client = None
     _lf_client = None
     _sts_client = None
+    _dynamo_client = None
     _config = {}
     _logger = logging.getLogger("DataMeshAdmin")
     stream_handler = logging.StreamHandler(sys.stdout)
     _logger.addHandler(stream_handler)
+    _subscriber_tracker = None
 
-    def __init__(self, log_level: str = "INFO"):
+    def __init__(self, region_name: str = 'us-east-1', log_level: str = "INFO"):
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
+        self._dynamo_client = boto3.client('dynamodb')
         self._lf_client = boto3.client('lakeformation')
+
+        # get the region for the module
+        if 'AWS_REGION' in os.environ:
+            self._region = os.environ.get('AWS_REGION')
+        else:
+            if region_name is None:
+                raise Exception("Cannot initialize a Data Mesh without an AWS Region")
+            else:
+                self._region = region_name
+
+        self._subscriber_tracker = SubscriberTracker(region_name=self._region)
         self._logger.setLevel(log_level)
 
     def _create_template_config(self, config: dict):
@@ -166,7 +182,8 @@ class DataMeshAdmin:
         return {
             "Manager": self._api_tuple(mgr_tuple),
             "ProducerAdmin": self._api_tuple(producer_tuple),
-            "ConsumerAdmin": self._api_tuple(consumer_tuple)
+            "ConsumerAdmin": self._api_tuple(consumer_tuple),
+            "SubscriptionTracker": self._subscriber_tracker.get_endpoints()
         }
 
     def enable_account_as_producer(self, account_id: str):
@@ -194,3 +211,11 @@ class DataMeshAdmin:
         utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
                                     role_name=DATA_MESH_ADMIN_CONSUMER_ROLENAME)
         self._logger.info("Enabled Account %s to assume %s" % (account_id, DATA_MESH_ADMIN_CONSUMER_ROLENAME))
+
+    def list_data_access(self, database_name: str = None, table_name: str = None, granted_principal: str = None,
+                         grant_date_start: str = None, grant_date_end: str = None):
+        '''
+        API which returns data accesses granted or pending, based upon the supplied filters
+        :return:
+        '''
+        pass

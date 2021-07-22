@@ -82,3 +82,24 @@ class DataMeshConsumer:
         self._logger.info("Attached Policy to Group %s" % group_name)
 
         return consumer_iam
+
+    def request_access_to_product(self, database_name: str,
+                                  request_permissions: list, table_name: str = None, requesting_principal: str = None):
+        '''
+        Requests access to a specific data product from the data mesh. Request can be for an entire database, a specific
+        table, but is restricted to a single principal. If no principal is provided, grants will be applied to the requesting
+        consumer role only. Returns an access request ID which will be approved or denied by the data product owner
+        :param database_name:
+        :param table_name:
+        :param requesting_principal:
+        :param request_permissions:
+        :return:
+        '''
+        pass
+
+    def list_product_access(self):
+        '''
+        Lists active and pending product access grants.
+        :return:
+        '''
+        pass

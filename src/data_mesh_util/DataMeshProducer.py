@@ -123,10 +123,39 @@ class DataMeshProducer:
             self._logger.info("No Action Required. Bucket access already enabled.")
 
     def grant_datamesh_access_to_s3(self, s3_bucket: str, data_mesh_account_id: str):
+        '''
+        Grants the data mesh account access to S3 through a bucket policy grant
+        :param s3_bucket:
+        :param data_mesh_account_id:
+        :return:
+        '''
         self._check_acct()
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
         self._logger.info("Class bound to Account %s" % self._data_producer_account_id)
 
+        # create a data lake location
+        lf_client = boto3.client('lakeformation', region_name=self._current_region)
+        s3_arn = "arn:aws:s3:::%s" % s3_bucket
+        lf_client.register_resource(
+            ResourceArn=s3_arn,
+            UseServiceLinkedRole=True
+        )
+
+        # add a data lake permission for the mesh account
+        lf_client.grant_permissions(
+            Principal={
+                'DataLakePrincipalIdentifier': data_mesh_account_id
+            },
+            Resource={
+                'DataLocation': {
+                    'ResourceArn': s3_arn
+                },
+            },
+            Permissions=['DATA_LOCATION_ACCESS'],
+            PermissionsWithGrantOption=['DATA_LOCATION_ACCESS']
+        )
+
+        # TODO remove bucket access based grants and update documentation based on successful test
         s3_client = boto3.client('s3')
         get_bucket_policy_response = None
         try:
@@ -213,6 +242,18 @@ class DataMeshProducer:
     def create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
                           producer_glue_client: str, data_mesh_database_name: str, producer_account_id: str,
                           data_mesh_account_id: str):
+        '''
+        API to create a table as a data product in the data mesh
+        :param table_def:
+        :param data_mesh_glue_client:
+        :param data_mesh_lf_client:
+        :param producer_ram_client:
+        :param producer_glue_client:
+        :param data_mesh_database_name:
+        :param producer_account_id:
+        :param data_mesh_account_id:
+        :return:
+        '''
         self._check_acct()
 
         # cleanup the TableInfo object to be usable as a TableInput
@@ -390,3 +431,27 @@ class DataMeshProducer:
                     sync_schedule=sync_mesh_catalog_schedule
                 )
                 self._logger.info("Created new Glue Crawler %s" % glue_crawler)
+
+    def list_pending_access_requests(self):
+        '''
+        Lists all access requests that have been made by potential consumers. Pending requests can be approved or denied
+        with close_access_request()
+        :return:
+        '''
+
+        pass
+
+    def close_access_request(self, request_id: str, access_decision: str, approve_principal: str = None,
+                             grant_permissions: list = None,
+                             decision_notes: str = None):
+        '''
+        API to close an access request with either an approval or rejection. Approvals must be accompanied by the
+        permissions to grant to the specified principal.
+        :param request_id:
+        :param access_decision: String indicating APPROVE or DENY decision for the access request.
+        :param grant_permissions:
+        :param approve_principal:
+        :param decision_notes:
+        :return:
+        '''
+        pass
