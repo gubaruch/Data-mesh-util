@@ -20,6 +20,7 @@ class DataMeshAdmin:
     _lf_client = None
     _sts_client = None
     _dynamo_client = None
+    _dynamo_resource = None
     _config = {}
     _logger = logging.getLogger("DataMeshAdmin")
     stream_handler = logging.StreamHandler(sys.stdout)
@@ -30,6 +31,7 @@ class DataMeshAdmin:
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
         self._dynamo_client = boto3.client('dynamodb')
+        self._dynamo_resource = boto3.resource('dynamodb')
         self._lf_client = boto3.client('lakeformation')
 
         # get the region for the module
@@ -41,7 +43,8 @@ class DataMeshAdmin:
             else:
                 self._region = region_name
 
-        self._subscriber_tracker = SubscriberTracker(region_name=self._region)
+        self._subscriber_tracker = SubscriberTracker(dynamo_client=self._dynamo_client,
+                                                     dynamo_resource=self._dynamo_resource)
         self._logger.setLevel(log_level)
 
     def _create_template_config(self, config: dict):

@@ -239,6 +239,12 @@ def generate_client(service: str, region: str, credentials: dict):
                         aws_session_token=credentials.get('SessionToken'))
 
 
+def generate_resource(service: str, region: str, credentials: dict):
+    return boto3.resource(service_name=service, region_name=region, aws_access_key_id=credentials.get('AccessKeyId'),
+                          aws_secret_access_key=credentials.get('SecretAccessKey'),
+                          aws_session_token=credentials.get('SessionToken'))
+
+
 def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, table_name: str = None,
                          permissions: list = ['ALL'],
                          grantable_permissions: list = ['ALL']):

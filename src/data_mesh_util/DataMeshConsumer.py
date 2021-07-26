@@ -12,6 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
+from data_mesh_util.lib.SubscriberTracker import SubscriberTracker
 
 
 class DataMeshConsumer:
@@ -23,7 +24,8 @@ class DataMeshConsumer:
     _sts_client = None
     _config = {}
     _current_region = None
-    _logger = logging.getLogger("DataMeshProducer")
+    _log_level = None
+    _logger = logging.getLogger("DataMeshConsumer")
     stream_handler = logging.StreamHandler(sys.stdout)
     _logger.addHandler(stream_handler)
 
@@ -33,8 +35,9 @@ class DataMeshConsumer:
         self._current_region = os.getenv('AWS_REGION')
 
         if self._current_region is None:
-            raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
+            raise Exception("Cannot create a Data Mesh Consumer without AWS_REGION environment variable")
 
+        self._log_level = log_level
         self._logger.setLevel(log_level)
 
     def _check_acct(self):
@@ -83,7 +86,7 @@ class DataMeshConsumer:
 
         return consumer_iam
 
-    def request_access_to_product(self, database_name: str,
+    def request_access_to_product(self, data_mesh_account_id: str, owner_account_id: str, database_name: str,
                                   request_permissions: list, table_name: str = None, requesting_principal: str = None):
         '''
         Requests access to a specific data product from the data mesh. Request can be for an entire database, a specific
@@ -95,7 +98,31 @@ class DataMeshConsumer:
         :param request_permissions:
         :return:
         '''
-        pass
+        # assume the consumer role in the data mesh account
+        data_mesh_consumer_role_arn = utils.get_datamesh_consumer_role_arn(account_id=data_mesh_account_id)
+        current_account = self._sts_client.get_caller_identity()
+        session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
+            'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
+        data_mesh_sts_session = self._sts_client.assume_role(RoleArn=data_mesh_consumer_role_arn,
+                                                             RoleSessionName=session_name)
+        self._logger.debug("Created new STS Session for Data Mesh Admin Producer")
+        self._logger.debug(data_mesh_sts_session)
+
+        # create a subscriber tracker in the data mesh consumer session
+        ddb_client = utils.generate_client(service='dynamodb', region=self._current_region,
+                                           credentials=data_mesh_sts_session.get('Credentials'))
+        ddb_resource = utils.generate_resource(service='dynamodb', region=self._current_region,
+                                               credentials=data_mesh_sts_session.get('Credentials'))
+        subscription_tracker = SubscriberTracker(dynamo_client=ddb_client, dynamo_resource=ddb_resource,
+                                                 log_level=self._log_level)
+
+        return subscription_tracker.create_subscription_request(
+            owner_account_id=owner_account_id,
+            database_name=database_name,
+            table_name=table_name,
+            principal=requesting_principal,
+            request_grants=request_permissions
+        )
 
     def list_product_access(self):
         '''
