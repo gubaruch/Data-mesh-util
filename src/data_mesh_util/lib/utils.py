@@ -259,7 +259,7 @@ def generate_client(service: str, region: str, credentials):
         "aws_secret_access_key": use_creds.get('SecretAccessKey')
     }
     if 'SessionToken' in use_creds:
-        args['SessionToken'] = use_creds.get('SessionToken')
+        args['aws_session_token'] = use_creds.get('SessionToken')
 
     return boto3.client(**args)
 
@@ -273,7 +273,7 @@ def generate_resource(service: str, region: str, credentials):
         "aws_secret_access_key": use_creds.get('SecretAccessKey')
     }
     if 'SessionToken' in use_creds:
-        args['SessionToken'] = use_creds.get('SessionToken')
+        args['aws_session_token'] = use_creds.get('SessionToken')
     return boto3.resource(**args)
 
 

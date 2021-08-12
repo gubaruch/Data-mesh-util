@@ -57,7 +57,8 @@
                 "dynamodb:DescribeTable",
                 "dynamodb:PutItem",
                 "dynamodb:Update*",
-                "dynamnodb:Query"
+                "dynamodb:Query",
+                "dynamodb:GetItem"
             ],
             "Resource": [
                 "arn:aws:dynamodb:*:{{data_mesh_account_id}}:table/AwsDataMeshSubscriptions",

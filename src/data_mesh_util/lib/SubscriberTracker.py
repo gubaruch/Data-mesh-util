@@ -268,9 +268,13 @@ class SubscriberTracker:
         return subscriptions
 
     def get_subscription(self, subscription_id: str):
-        item = self._table.get_item(Key={
-            SUBSCRIPTION_ID: subscription_id
-        }, ConsistentRead=True)
+        args = {
+            "Key": {
+                SUBSCRIPTION_ID: subscription_id
+            },
+            "ConsistentRead": True
+        }
+        item = self._table.get_item(**args)
 
         return item.get("Item")
 

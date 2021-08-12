@@ -20,8 +20,24 @@ class ConsumerAccountTests(unittest.TestCase):
             owner_account_id=PRODUCER_ACCOUNT,
             database_name=DATABASE_NAME,
             request_permissions=['SELECT', 'DESCRIBE'],
-            tables=['1customer'],
+            tables=['customer'],
             requesting_principal=CONSUMER_ACCOUNT
         )
         self.assertIsNotNone(sub)
         self._logger.info('Subscription %s' % sub)
+
+        # now fetch the subscription
+        sub_id = sub[0].get("SubscriptionId")
+        subscription = self._mgr.get_access_request(sub_id)
+        self.assertIsNotNone(subscription)
+        self.assertEqual(subscription.get("SubscriptionId"), sub_id)
+
+    def test_fail_create_subscription(self):
+        with self.assertRaises(Exception):
+            sub = self._mgr.request_access_to_product(
+                owner_account_id=PRODUCER_ACCOUNT,
+                database_name=DATABASE_NAME,
+                request_permissions=['SELECT', 'DESCRIBE'],
+                tables=['does_not_exist'],
+                requesting_principal=CONSUMER_ACCOUNT
+            )
