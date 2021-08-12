@@ -78,8 +78,7 @@ class SubscriberTracker:
         _logger = logging.getLogger("SubscriberTracker")
 
         # make sure we always log to standard out
-        stream_handler = logging.StreamHandler(sys.stdout)
-        _logger.addHandler(stream_handler)
+        _logger.addHandler(logging.StreamHandler(sys.stdout))
         _logger.setLevel(log_level)
 
     def _init_table(self):
@@ -267,6 +266,13 @@ class SubscriberTracker:
                     subscriptions.append({TABLE_NAME: table_name, SUBSCRIPTION_ID: subscription_id})
 
         return subscriptions
+
+    def get_subscription(self, subscription_id: str):
+        item = self._table.get_item(Key={
+            SUBSCRIPTION_ID: subscription_id
+        }, ConsistentRead=True)
+
+        return item.get("Item")
 
     def update_status(self, subscription_id: str, status: str):
         '''

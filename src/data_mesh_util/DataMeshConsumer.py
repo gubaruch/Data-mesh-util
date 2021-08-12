@@ -20,22 +20,36 @@ class DataMeshConsumer:
     _data_consumer_role_arn = None
     _data_consumer_account_id = None
     _data_mesh_manager_role_arn = None
+    _data_mesh_sts_session = None
     _iam_client = None
     _sts_client = None
     _config = {}
     _current_region = None
     _log_level = None
     _logger = logging.getLogger("DataMeshConsumer")
-    stream_handler = logging.StreamHandler(sys.stdout)
-    _logger.addHandler(stream_handler)
+    _logger.addHandler(logging.StreamHandler(sys.stdout))
+    _subscription_tracker = None
 
     def __init__(self, data_mesh_account_id: str, log_level: str = "INFO"):
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
         self._current_region = os.getenv('AWS_REGION')
+        self._log_level = log_level
+        self._logger.setLevel(log_level)
 
+        # create the subscription tracker
+        current_account = self._sts_client.get_caller_identity()
+        session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
+            'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
         self._data_mesh_account_id = data_mesh_account_id
         self._data_consumer_role_arn = utils.get_datamesh_consumer_role_arn(account_id=data_mesh_account_id)
+        self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_consumer_role_arn,
+                                                                   RoleSessionName=session_name)
+        self._logger.debug("Created new STS Session for Data Mesh Admin Consumer")
+        self._logger.debug(self._data_mesh_sts_session)
+        self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_sts_session.get('Credentials'),
+                                                       region_name=self._current_region,
+                                                       log_level=self._log_level)
 
         if self._current_region is None:
             raise Exception("Cannot create a Data Mesh Consumer without AWS_REGION environment variable")
@@ -48,6 +62,7 @@ class DataMeshConsumer:
         if utils.validate_correct_account(self._iam_client, DATA_MESH_ADMIN_CONSUMER_ROLENAME) is False:
             raise Exception("Function should be run in the Data Consumer Account")
 
+    # TODO remove this method in favour of CloudFormation based init
     def initialize_consumer_account(self):
         '''
         Sets up an AWS Account to act as a Data Consumer from the central Data Mesh Account. This method should be invoked
@@ -97,21 +112,7 @@ class DataMeshConsumer:
         :param request_permissions:
         :return:
         '''
-        # assume the consumer role in the data mesh account
-        current_account = self._sts_client.get_caller_identity()
-        session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
-            'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
-        data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_consumer_role_arn,
-                                                             RoleSessionName=session_name)
-        self._logger.debug("Created new STS Session for Data Mesh Admin Consumer")
-        self._logger.debug(data_mesh_sts_session)
-
-        # create a subscriber tracker in the data mesh consumer session
-        subscription_tracker = SubscriberTracker(credentials=data_mesh_sts_session.get('Credentials'),
-                                                 region_name=self._current_region,
-                                                 log_level=self._log_level)
-
-        return subscription_tracker.create_subscription_request(
+        return self._subscription_tracker.create_subscription_request(
             owner_account_id=owner_account_id,
             database_name=database_name,
             tables=tables,
@@ -119,7 +120,7 @@ class DataMeshConsumer:
             request_grants=request_permissions
         )
 
-    def list_product_access(self):
+    def list_product_access(self, principal_id: str):
         '''
         Lists active and pending product access grants.
         :return:
@@ -127,4 +128,4 @@ class DataMeshConsumer:
         pass
 
     def get_access_request(self, request_id: str):
-        pass
+        return self._subscription_tracker.get_subscription(subscription_id=request_id)
