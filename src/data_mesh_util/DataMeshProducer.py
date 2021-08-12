@@ -276,32 +276,38 @@ class DataMeshProducer:
 
         # grant access to the producer account
         perms = ['SELECT', 'ALTER', 'INSERT', 'DESCRIBE']
-        utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal=producer_account_id,
+        created_object = utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal=producer_account_id,
                                    database_name=data_mesh_database_name, table_name=table_name, permissions=perms,
                                    grantable_permissions=perms, logger=self._logger)
 
+        # grant any IAM principal the right to describe the table
+        utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal='IAM_ALLOWED_PRINCIPALS',
+                                   database_name=data_mesh_database_name, table_name=table_name, permissions=['DESCRIBE'],
+                                   grantable_permissions=None, logger=self._logger)
+
         # in the producer account, accept the RAM share after 1 second - seems to be an async delay
-        time.sleep(1)
-        utils.accept_pending_lf_resource_share(ram_client=producer_ram_client, sender_account=data_mesh_account_id,
-                                               logger=self._logger)
+        if created_object is not None:
+            time.sleep(1)
+            utils.accept_pending_lf_resource_share(ram_client=producer_ram_client, sender_account=data_mesh_account_id,
+                                                   logger=self._logger)
 
-        # create a resource link for the data mesh table in producer account
-        link_table_name = "%s_link" % table_name
-        try:
-            producer_glue_client.create_table(
-                DatabaseName=data_mesh_database_name,
-                TableInput={"Name": link_table_name,
-                            "TargetTable": {"CatalogId": data_mesh_account_id,
-                                            "DatabaseName": data_mesh_database_name,
-                                            "Name": table_name
-                                            }
-                            }
-            )
-            self._logger.info("Created Resource Link Table")
-        except producer_glue_client.exceptions.from_code('AlreadyExistsException'):
-            self._logger.info("Resource Link Table Already Exists")
+            # create a resource link for the data mesh table in producer account
+            link_table_name = "%s_link" % table_name
+            try:
+                producer_glue_client.create_table(
+                    DatabaseName=data_mesh_database_name,
+                    TableInput={"Name": link_table_name,
+                                "TargetTable": {"CatalogId": data_mesh_account_id,
+                                                "DatabaseName": data_mesh_database_name,
+                                                "Name": table_name
+                                                }
+                                }
+                )
+                self._logger.info("Created Resource Link Table")
+            except producer_glue_client.exceptions.from_code('AlreadyExistsException'):
+                self._logger.info("Resource Link Table Already Exists")
 
-        return table_name, link_table_name
+            return table_name, link_table_name
 
     def _load_glue_tables(self, glue_client, catalog_id: str, source_db_name: str, table_name_regex: str):
         # get the tables which are included in the set provided through args
@@ -441,12 +447,25 @@ class DataMeshProducer:
 
         pass
 
-    def close_access_request(self, request_id: str, access_decision: str, approve_principal: str = None,
-                             grant_permissions: list = None,
-                             decision_notes: str = None):
+    def approve_access_request(self, request_id: str,
+                               grant_permissions: list = None,
+                               decision_notes: str = None):
         '''
-        API to close an access request with either an approval or rejection. Approvals must be accompanied by the
+        API to close an access request as approved. Approvals must be accompanied by the
         permissions to grant to the specified principal.
+        :param request_id:
+        :param access_decision: String indicating APPROVE or DENY decision for the access request.
+        :param grant_permissions:
+        :param approve_principal:
+        :param decision_notes:
+        :return:
+        '''
+        pass
+
+    def deny_access_request(self, request_id: str,
+                            decision_notes: str = None):
+        '''
+        API to close an access request as denied. The reason for the denial should be included in decision_notes.
         :param request_id:
         :param access_decision: String indicating APPROVE or DENY decision for the access request.
         :param grant_permissions:

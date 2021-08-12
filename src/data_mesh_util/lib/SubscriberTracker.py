@@ -1,10 +1,10 @@
 import logging
-import time
 import sys
 from constants import *
-from boto3.dynamodb.conditions import Attr, Or, And, Not, Key
+from boto3.dynamodb.conditions import Attr, Or, And, Key
 import shortuuid
 from datetime import datetime
+import data_mesh_util.lib.utils as utils
 
 STATUS_ACTIVE = 'Active'
 STATUS_DENIED = 'Denied'
@@ -33,6 +33,13 @@ def _format_time_now():
 
 
 def _add_www(item: dict, principal: str, new: bool = True):
+    '''
+    Method to decorate a DynamoDB item with Who What When attributes
+    :param item:
+    :param principal:
+    :param new:
+    :return:
+    '''
     if new:
         item[CREATION_DATE] = _format_time_now()
         item[CREATED_BY] = principal
@@ -46,20 +53,26 @@ def _add_www(item: dict, principal: str, new: bool = True):
 class SubscriberTracker:
     _dynamo_client = None
     _dynamo_resource = None
+    _glue_client = None
     _table_info = None
     _table = None
     _logger = None
+    _region = None
 
-    def __init__(self, dynamo_client, dynamo_resource, log_level: str = "INFO"):
+    def __init__(self, credentials, region_name: str, log_level: str = "INFO"):
         '''
         Initialize a subscriber tracker. Requires the external creation of clients because we will span roles
         :param dynamo_client:
         :param dynamo_resource:
         :param log_level:
         '''
-        self._dynamo_client = dynamo_client
-        self._dynamo_resource = dynamo_resource
-
+        self._region = region_name
+        self._dynamo_client = utils.generate_client(service='dynamodb', region=region_name,
+                                                    credentials=credentials)
+        self._dynamo_resource = utils.generate_resource(service='dynamodb', region=region_name,
+                                                        credentials=credentials)
+        self._glue_client = utils.generate_client(service='glue', region=region_name,
+                                                  credentials=credentials)
         self._table_info = self._init_table()
 
         _logger = logging.getLogger("SubscriberTracker")
@@ -71,13 +84,6 @@ class SubscriberTracker:
 
     def _init_table(self):
         t = None
-
-        def _extract_format():
-            return {
-                'Table': t.get('TableArn'),
-                'Stream': t.get('LatestStreamArn')
-            }
-
         try:
             response = self._dynamo_client.describe_table(
                 TableName=SUBSCRIPTIONS_TRACKER_TABLE
@@ -89,7 +95,10 @@ class SubscriberTracker:
 
         self._table = self._dynamo_resource.Table(SUBSCRIPTIONS_TRACKER_TABLE)
 
-        return _extract_format()
+        return {
+            'Table': t.get('TableArn'),
+            'Stream': t.get('LatestStreamArn')
+        }
 
     def subscriber_indexname(self):
         return "%s-%s" % (SUBSCRIPTIONS_TRACKER_TABLE, 'Subscriber')
@@ -170,55 +179,94 @@ class SubscriberTracker:
     def get_endpoints(self):
         return self._table_info
 
-    def create_subscription_request(self, owner_account_id: str, database_name: str, table_name: str, principal: str,
+    def _validate_object(self, database_name: str, table_name: str):
+        try:
+            response = self._glue_client.get_table(
+                DatabaseName=database_name,
+                Name=table_name
+            )
+
+            if 'Table' not in response:
+                return False
+            else:
+                return True
+        except self._glue_client.exceptions.AccessDeniedException:
+            # if we get access denied here, it's because the object doesn't exist
+            return False
+
+    def create_subscription_request(self, owner_account_id: str, database_name: str, tables: list, principal: str,
                                     request_grants: list):
         # look up if there is already a subscription request for this object
         d = Attr(DATABASE_NAME).eq(database_name)
-        if table_name is not None:
-            find_filter = And(d, Attr(TABLE_NAME).eq(table_name))
-        else:
-            find_filter = d
 
-        found = self._table.query(
-            IndexName=self.subscriber_indexname(),
-            Select='SPECIFIC_ATTRIBUTES',
-            ProjectionExpression=SUBSCRIPTION_ID,
-            ConsistentRead=False,
-            KeyConditionExpression=Key(SUBSCRIBER_PRINCIPAL).eq(principal),
-            FilterExpression=find_filter
-        )
+        def _sub_exists(filter):
+            found = self._table.query(
+                IndexName=self.subscriber_indexname(),
+                Select='SPECIFIC_ATTRIBUTES',
+                ProjectionExpression=SUBSCRIPTION_ID,
+                ConsistentRead=False,
+                KeyConditionExpression=Key(SUBSCRIBER_PRINCIPAL).eq(principal),
+                FilterExpression=filter
+            )
 
-        if found.get('Count') == 1:
-            return found.get('Items')[0].get(SUBSCRIPTION_ID)
-        else:
-            # generate the subscription item
-            item = _add_www(item={
-                SUBSCRIPTION_ID: _generate_id(),
+            if found.get('Count') == 1:
+                return found.get('Items')[0].get(SUBSCRIPTION_ID)
+            else:
+                return None
+
+        def _create_subscription(item, principal):
+            # generate a new subscription
+            item = _add_www(item=item, principal=principal)
+
+            self._table.put_item(
+                Item=item
+            )
+
+        subscriptions = []
+        if tables is None:
+            sub_id = _sub_exists(d)
+            if sub_id is not None:
+                sub_id = _generate_id()
+
+            # create a database level subscription
+            item = {
+                SUBSCRIPTION_ID: sub_id,
                 OWNER_PRINCIPAL: owner_account_id,
                 SUBSCRIBER_PRINCIPAL: principal,
                 REQUESTED_GRANTS: request_grants,
+                DATABASE_NAME: database_name
+            }
+            _create_subscription(item=item, principal=principal)
+
+            subscriptions.append({
                 DATABASE_NAME: database_name,
-                TABLE_NAME: table_name
-            }, principal=principal)
+                SUBSCRIPTION_ID: sub_id
+            })
+        else:
+            for table_name in tables:
+                # validate if the object exists
+                exists = self._validate_object(database_name=database_name, table_name=table_name)
 
-            # generate the condition. We'll block any case where the subscriber principal has requested the same database and table
-            cond = Not(
-                And(
-                    And(
-                        Attr(SUBSCRIBER_PRINCIPAL).eq(principal),
-                        Attr(DATABASE_NAME).eq(database_name)
-                    ),
-                    Attr(TABLE_NAME).eq(table_name)
-                )
-            )
+                if not exists:
+                    raise Exception("Table %s does not exist in %s" % (table_name, database_name))
+                else:
+                    subscription_id = _sub_exists(And(d, Attr(TABLE_NAME).eq(table_name)))
+                    if subscription_id is None:
+                        subscription_id = _generate_id()
 
-            # put the item in
-            response = self._table.put_item(
-                Item=item,
-                ConditionExpression=cond
-            )
+                    item = {
+                        SUBSCRIPTION_ID: subscription_id,
+                        OWNER_PRINCIPAL: owner_account_id,
+                        SUBSCRIBER_PRINCIPAL: principal,
+                        REQUESTED_GRANTS: request_grants,
+                        DATABASE_NAME: database_name,
+                        TABLE_NAME: table_name
+                    }
+                    _create_subscription(item=item, principal=principal)
 
-            return response.get('Attributes').get(SUBSCRIPTION_ID)
+                    subscriptions.append({TABLE_NAME: table_name, SUBSCRIPTION_ID: subscription_id})
+
+        return subscriptions
 
     def update_status(self, subscription_id: str, status: str):
         '''

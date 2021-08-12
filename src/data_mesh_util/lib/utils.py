@@ -249,7 +249,6 @@ def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, 
                          permissions: list = ['ALL'],
                          grantable_permissions: list = ['ALL']):
     try:
-        # grant all permissions to the producer account for the resource link
         table_spec = {
             'DatabaseName': database_name
         }
@@ -265,7 +264,6 @@ def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, 
             "Resource": {
                 'Table': table_spec
             },
-            # producer role for this linked table has full rights on the Data Mesh Object
             "Permissions": permissions
         }
 
@@ -274,9 +272,18 @@ def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, 
 
         logger.debug(args)
 
-        lf_client.grant_permissions(**args)
-    except lf_client.exceptions.from_code('AlreadyExistsException'):
-        pass
+        return lf_client.grant_permissions(**args)
+    except lf_client.exceptions.from_code('AlreadyExistsException') as aee:
+        return None
+    except lf_client.exceptions.InvalidInputException as iie:
+        if "Permissions modification is invalid" in str(iie):
+            # this is an error thrown when you try to create the same permissions that already exist :(
+            return None
+        elif "Please revoke permission(s) for IAM_ALLOWED_PRINCIPALS on the table" in str(iie):
+            # this occurs because we are granting any IAM principal to describe the table, which means that the previous creation of the grant is already in place. ignore
+            return None
+        else:
+            raise iie
 
 
 def accept_pending_lf_resource_share(logger, ram_client, sender_account: str):
