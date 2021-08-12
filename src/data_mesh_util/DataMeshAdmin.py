@@ -43,9 +43,12 @@ class DataMeshAdmin:
             else:
                 self._region = region_name
 
-        self._subscriber_tracker = SubscriberTracker(dynamo_client=self._dynamo_client,
-                                                     dynamo_resource=self._dynamo_resource)
         self._logger.setLevel(log_level)
+
+        current_credentials = boto3.session.Session().get_credentials()
+        self._subscription_tracker = SubscriberTracker(credentials=current_credentials,
+                                                       region_name=self._region,
+                                                       log_level=log_level)
 
     def _create_template_config(self, config: dict):
         if config is None:
@@ -186,7 +189,7 @@ class DataMeshAdmin:
             "Manager": self._api_tuple(mgr_tuple),
             "ProducerAdmin": self._api_tuple(producer_tuple),
             "ConsumerAdmin": self._api_tuple(consumer_tuple),
-            "SubscriptionTracker": self._subscriber_tracker.get_endpoints()
+            "SubscriptionTracker": self._subscription_tracker.get_endpoints()
         }
 
     def enable_account_as_producer(self, account_id: str):

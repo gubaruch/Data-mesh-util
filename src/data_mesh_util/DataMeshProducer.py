@@ -43,6 +43,7 @@ class DataMeshProducer:
                                           DATA_MESH_PRODUCER_ROLENAME if override_acct is None else override_acct) is False:
             raise Exception("Function should be run in the Data Domain Producer Account")
 
+    # TODO move method to CloudFormation based provisioning
     def initialize_producer_account(self, s3_bucket: str, data_mesh_account_id: str):
         '''
         Sets up an AWS Account to act as a Data Provider into the central Data Mesh Account. This method should be invoked

@@ -1,3 +1,8 @@
+try:
+    from collections.abc import Mapping  # noqa
+except ImportError:
+    from collections import Mapping  # noqa
+
 from constants import *
 import json
 import os
@@ -233,16 +238,43 @@ def get_datamesh_consumer_role_arn(account_id: str):
     return _get_role_arn(account_id, DATA_MESH_ADMIN_CONSUMER_ROLENAME)
 
 
-def generate_client(service: str, region: str, credentials: dict):
-    return boto3.client(service_name=service, region_name=region, aws_access_key_id=credentials.get('AccessKeyId'),
-                        aws_secret_access_key=credentials.get('SecretAccessKey'),
-                        aws_session_token=credentials.get('SessionToken'))
+def _validate_credentials(credentials) -> dict:
+    if isinstance(credentials, Mapping):
+        return credentials
+    else:
+        # treat as a Boto3 Credentials object
+        out = {'AccessKeyId': credentials.access_key, "SecretAccessKey": credentials.secret_key}
+        if credentials.token is not None:
+            out['SessionToken'] = credentials.token
+
+        return out
 
 
-def generate_resource(service: str, region: str, credentials: dict):
-    return boto3.resource(service_name=service, region_name=region, aws_access_key_id=credentials.get('AccessKeyId'),
-                          aws_secret_access_key=credentials.get('SecretAccessKey'),
-                          aws_session_token=credentials.get('SessionToken'))
+def generate_client(service: str, region: str, credentials):
+    use_creds = _validate_credentials(credentials)
+    args = {
+        "service_name": service,
+        "region_name": region,
+        "aws_access_key_id": use_creds.get('AccessKeyId'),
+        "aws_secret_access_key": use_creds.get('SecretAccessKey')
+    }
+    if 'SessionToken' in use_creds:
+        args['SessionToken'] = use_creds.get('SessionToken')
+
+    return boto3.client(**args)
+
+
+def generate_resource(service: str, region: str, credentials):
+    use_creds = _validate_credentials(credentials)
+    args = {
+        "service_name": service,
+        "region_name": region,
+        "aws_access_key_id": use_creds.get('AccessKeyId'),
+        "aws_secret_access_key": use_creds.get('SecretAccessKey')
+    }
+    if 'SessionToken' in use_creds:
+        args['SessionToken'] = use_creds.get('SessionToken')
+    return boto3.resource(**args)
 
 
 def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, table_name: str = None,
