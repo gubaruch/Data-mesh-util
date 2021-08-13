@@ -12,6 +12,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
+from data_mesh_util.lib.SubscriberTracker import *
+
 
 
 class DataMeshProducer:
@@ -26,8 +28,13 @@ class DataMeshProducer:
     _logger = logging.getLogger("DataMeshProducer")
     stream_handler = logging.StreamHandler(sys.stdout)
     _logger.addHandler(stream_handler)
+    _data_mesh_account_id = None
+    _data_producer_role_arn = None
+    _data_mesh_sts_session = None
+    _subscription_tracker = None
 
-    def __init__(self, log_level: str = "INFO"):
+    def __init__(self, data_mesh_account_id: str, log_level: str = "INFO"):
+        self._data_mesh_account_id = data_mesh_account_id
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
         self._current_region = os.getenv('AWS_REGION')
@@ -37,53 +44,22 @@ class DataMeshProducer:
 
         self._logger.setLevel(log_level)
 
+        current_account = self._sts_client.get_caller_identity()
+        session_name = utils.make_iam_session_name(current_account)
+        self._data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=data_mesh_account_id)
+        self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_producer_role_arn,
+                                                                   RoleSessionName=session_name)
+        self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_sts_session.get('Credentials'),
+                                                       region_name=self._current_region,
+                                                       log_level=log_level)
+
     def _check_acct(self, override_acct: str = None):
         # validate that we are being run within the correct account
         if utils.validate_correct_account(self._iam_client,
                                           DATA_MESH_PRODUCER_ROLENAME if override_acct is None else override_acct) is False:
             raise Exception("Function should be run in the Data Domain Producer Account")
 
-    # TODO move method to CloudFormation based provisioning
-    def initialize_producer_account(self, s3_bucket: str, data_mesh_account_id: str):
-        '''
-        Sets up an AWS Account to act as a Data Provider into the central Data Mesh Account. This method should be invoked
-        by an Administrator of the Producer Account. Creates IAM Role & Policy to get and put restricted S3 Bucket Policies.
-        Requires at least 1 S3 Bucket Policy be enabled for future grants.
-        :return:
-        '''
-        self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
-        self._logger.info("Setting up Account %s as a Data Producer" % self._data_producer_account_id)
-
-        data_mesh_producer_role_arn = utils.get_datamesh_producer_role_arn(data_mesh_account_id)
-
-        # setup the producer IAM role
-        producer_iam = utils.configure_iam(
-            iam_client=self._iam_client,
-            policy_name=PRODUCER_POLICY_NAME,
-            policy_desc='IAM Policy enabling Accounts to get and put restricted S3 Bucket Policies',
-            policy_template="producer_access_catalog.pystache",
-            role_name=DATA_MESH_PRODUCER_ROLENAME,
-            role_desc='Role to be used to update S3 Bucket Policies for access by the Data Mesh Account',
-            config={"bucket": s3_bucket},
-            account_id=self._data_producer_account_id)
-
-        # now create the iam policy allowing the producer group to assume the data mesh producer role
-        policy_name = "AssumeDataMeshAdminProducer"
-        policy_arn = utils.create_assume_role_policy(
-            iam_client=self._iam_client,
-            account_id=self._data_producer_account_id,
-            policy_name=policy_name,
-            role_arn=data_mesh_producer_role_arn
-        )
-        self._logger.info("Created new IAM Policy %s" % policy_arn)
-
-        # now let the group assume the cross account role
-        group_name = "%sGroup" % DATA_MESH_PRODUCER_ROLENAME
-        self._iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
-        self._logger.info("Attached Policy to Group %s" % group_name)
-
-        return producer_iam
-
+    # TODO Deprecate this method as we don't need it due to using lakeformation permissions
     def enable_future_sharing(self, s3_bucket: str):
         '''
         Adds a Bucket and Prefix to the policy document for the DataProducer Role, which will enable the Role to potentially
@@ -123,6 +99,7 @@ class DataMeshProducer:
         else:
             self._logger.info("No Action Required. Bucket access already enabled.")
 
+    # TODO Deprecate this method as we don't need it due to using lakeformation permissions
     def grant_datamesh_access_to_s3(self, s3_bucket: str, data_mesh_account_id: str):
         '''
         Grants the data mesh account access to S3 through a bucket policy grant
@@ -240,9 +217,9 @@ class DataMeshProducer:
 
         return t
 
-    def create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
-                          producer_glue_client: str, data_mesh_database_name: str, producer_account_id: str,
-                          data_mesh_account_id: str):
+    def _create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
+                           producer_glue_client: str, data_mesh_database_name: str, producer_account_id: str,
+                           data_mesh_account_id: str):
         '''
         API to create a table as a data product in the data mesh
         :param table_def:
@@ -278,12 +255,14 @@ class DataMeshProducer:
         # grant access to the producer account
         perms = ['SELECT', 'ALTER', 'INSERT', 'DESCRIBE']
         created_object = utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal=producer_account_id,
-                                   database_name=data_mesh_database_name, table_name=table_name, permissions=perms,
-                                   grantable_permissions=perms, logger=self._logger)
+                                                    database_name=data_mesh_database_name, table_name=table_name,
+                                                    permissions=perms,
+                                                    grantable_permissions=perms, logger=self._logger)
 
         # grant any IAM principal the right to describe the table
         utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal='IAM_ALLOWED_PRINCIPALS',
-                                   database_name=data_mesh_database_name, table_name=table_name, permissions=['DESCRIBE'],
+                                   database_name=data_mesh_database_name, table_name=table_name,
+                                   permissions=['DESCRIBE'],
                                    grantable_permissions=None, logger=self._logger)
 
         # in the producer account, accept the RAM share after 1 second - seems to be an async delay
@@ -364,8 +343,7 @@ class DataMeshProducer:
         # assume the data mesh admin producer role. if this fails, then the requesting identity is wrong
         data_mesh_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=data_mesh_account_id)
         current_account = self._sts_client.get_caller_identity()
-        session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
-            'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
+        session_name = utils.make_iam_session_name(current_account)
         data_mesh_sts_session = self._sts_client.assume_role(RoleArn=data_mesh_producer_role_arn,
                                                              RoleSessionName=session_name)
         self._logger.debug("Created new STS Session for Data Mesh Admin Producer")
@@ -417,7 +395,7 @@ class DataMeshProducer:
             table_s3_path = table.get('StorageDescriptor').get('Location')
 
             # create a mesh table for the local copy
-            created_table = self.create_mesh_table(
+            created_table = self._create_mesh_table(
                 table_def=table,
                 data_mesh_glue_client=data_mesh_glue_client,
                 data_mesh_lf_client=data_mesh_lf_client,
@@ -445,8 +423,8 @@ class DataMeshProducer:
         with close_access_request()
         :return:
         '''
-
-        pass
+        me = current_account = self._sts_client.get_caller_identity().get('Account')
+        return self._subscription_tracker.list_subscriptions(owner_id=me, request_status=STATUS_PENDING)
 
     def approve_access_request(self, request_id: str,
                                grant_permissions: list = None,
@@ -455,9 +433,7 @@ class DataMeshProducer:
         API to close an access request as approved. Approvals must be accompanied by the
         permissions to grant to the specified principal.
         :param request_id:
-        :param access_decision: String indicating APPROVE or DENY decision for the access request.
         :param grant_permissions:
-        :param approve_principal:
         :param decision_notes:
         :return:
         '''
@@ -468,10 +444,13 @@ class DataMeshProducer:
         '''
         API to close an access request as denied. The reason for the denial should be included in decision_notes.
         :param request_id:
-        :param access_decision: String indicating APPROVE or DENY decision for the access request.
-        :param grant_permissions:
-        :param approve_principal:
         :param decision_notes:
         :return:
         '''
+        pass
+
+    def update_subscription(self, subscription_id: str, grant_permissions: list, notes: str):
+        pass
+
+    def delete_subscription(self, subscription_id: str, reason: str):
         pass

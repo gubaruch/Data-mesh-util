@@ -39,8 +39,7 @@ class DataMeshConsumer:
 
         # create the subscription tracker
         current_account = self._sts_client.get_caller_identity()
-        session_name = "%s-%s-%s" % (current_account.get('UserId'), current_account.get(
-            'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
+        session_name = utils.make_iam_session_name(current_account)
         self._data_mesh_account_id = data_mesh_account_id
         self._data_consumer_role_arn = utils.get_datamesh_consumer_role_arn(account_id=data_mesh_account_id)
         self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_consumer_role_arn,
@@ -61,44 +60,6 @@ class DataMeshConsumer:
         # validate that we are being run within the correct account
         if utils.validate_correct_account(self._iam_client, DATA_MESH_ADMIN_CONSUMER_ROLENAME) is False:
             raise Exception("Function should be run in the Data Consumer Account")
-
-    # TODO remove this method in favour of CloudFormation based init
-    def initialize_consumer_account(self):
-        '''
-        Sets up an AWS Account to act as a Data Consumer from the central Data Mesh Account. This method should be invoked
-        by an Administrator of the Consumer Account. Creates IAM Role & Policy which allows an end user to assume the
-        DataMeshAdminConsumer Role and subscribe to products.
-        :return:
-        '''
-        self._check_acct()
-        self._data_consumer_account_id = self._sts_client.get_caller_identity().get('Account')
-        self._logger.info("Setting up Account %s as a Data Consumer" % self._data_consumer_account_id)
-
-        # setup the consumer IAM role
-        consumer_iam = utils.configure_iam(
-            iam_client=self._iam_client,
-            policy_name=CONSUMER_POLICY_NAME,
-            policy_desc='IAM Policy enabling Accounts to Assume the DataMeshAdminConsumer Role',
-            policy_template="consumer_policy.pystache",
-            role_name=DATA_MESH_CONSUMER_ROLENAME,
-            role_desc='Role to be used to update S3 Bucket Policies for access by the Data Mesh Account',
-            account_id=self._data_consumer_account_id)
-
-        policy_name = "AssumeDataMeshAdminConsumer"
-        policy_arn = utils.create_assume_role_policy(
-            iam_client=self._iam_client,
-            account_id=self._data_consumer_account_id,
-            policy_name=policy_name,
-            role_arn=self._data_consumer_role_arn
-        )
-        self._logger.info("Created new IAM Policy %s" % policy_arn)
-
-        # now let the group assume the cross account role
-        group_name = "%sGroup" % DATA_MESH_CONSUMER_ROLENAME
-        self._iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
-        self._logger.info("Attached Policy to Group %s" % group_name)
-
-        return consumer_iam
 
     def request_access_to_product(self, owner_account_id: str, database_name: str,
                                   request_permissions: list, tables: list = None, requesting_principal: str = None):
@@ -127,5 +88,8 @@ class DataMeshConsumer:
         '''
         pass
 
-    def get_access_request(self, request_id: str):
+    def get_subscription(self, request_id: str):
         return self._subscription_tracker.get_subscription(subscription_id=request_id)
+
+    def delete_subscription(self, subscription_id: str, reason: str):
+        pass

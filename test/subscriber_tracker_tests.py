@@ -37,7 +37,7 @@ class SubscriberTrackerTests(unittest.TestCase):
 
         # use the list api to make sure we can get 10 back using various scenarios
         def _list_subs(args):
-            listed_subs = self._subscription_tracker.list_subscriptions(**args).get("Items")
+            listed_subs = self._subscription_tracker.list_subscriptions(**args).get("Subscriptions")
             self.assertGreaterEqual(len(listed_subs), c)
 
         # Walk the tree of args

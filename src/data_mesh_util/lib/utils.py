@@ -9,6 +9,12 @@ import os
 import pystache
 import time
 import boto3
+import datetime
+
+
+def make_iam_session_name(current_account):
+    return "%s-%s-%s" % (current_account.get('UserId').replace(":", ""), current_account.get(
+        'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
 
 
 def validate_correct_account(iam_client, role_must_exist: str):

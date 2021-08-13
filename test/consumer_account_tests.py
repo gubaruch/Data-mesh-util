@@ -1,6 +1,13 @@
 import unittest
 import warnings
 import logging
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src/resource"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src/lib"))
+
 from data_mesh_util import DataMeshConsumer as dmc
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
@@ -28,7 +35,7 @@ class ConsumerAccountTests(unittest.TestCase):
 
         # now fetch the subscription
         sub_id = sub[0].get("SubscriptionId")
-        subscription = self._mgr.get_access_request(sub_id)
+        subscription = self._mgr.get_subscription(sub_id)
         self.assertIsNotNone(subscription)
         self.assertEqual(subscription.get("SubscriptionId"), sub_id)
 

@@ -1,9 +1,18 @@
 import unittest
-from data_mesh_util import DataMeshAdmin as dmu
 import warnings
 import logging
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src/resource"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src/lib"))
+
+from data_mesh_util import DataMeshAdmin as dmu
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
+
+MESH_ACCOUNT = '887210671223'
 
 
 class DataMeshAdminAccountTests(unittest.TestCase):

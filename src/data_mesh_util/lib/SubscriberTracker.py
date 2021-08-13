@@ -279,7 +279,7 @@ class SubscriberTracker:
 
         return subscriptions
 
-    def get_subscription(self, subscription_id: str):
+    def get_subscription(self, subscription_id: str, force: bool = False):
         args = {
             "Key": {
                 SUBSCRIPTION_ID: subscription_id
@@ -288,7 +288,9 @@ class SubscriberTracker:
         }
         item = self._table.get_item(**args)
 
-        return item.get("Item")
+        i = item.get("Item")
+        if not (DELETED in i or i.get(STATUS) == STATUS_DELETED) or force:
+            return i
 
     def _arg_builder(self, key: str, value):
         if value is not None:
@@ -321,31 +323,38 @@ class SubscriberTracker:
                 else:
                     filter = And(filter, Attr(arg[0]).eq(arg[1]))
 
+        # add the deleted filter
+        filter = And(filter, Attr(STATUS).ne(STATUS_DELETED))
+
         return filter
 
     def list_subscriptions(self, owner_id: str = None, principal_id: str = None, database_name: str = None,
-                           tables: list = None, includes_grants: list = None, request_status: str = None):
+                           tables: list = None, includes_grants: list = None, request_status: str = None,
+                           start_token: str = None):
         args = {}
 
         def _add_arg(key: str, value):
             if value is not None:
                 args[key] = value
 
-        # determine if we are looking up by owner or subscriber, meaning we can query
         _add_arg("TableName", SUBSCRIPTIONS_TRACKER_TABLE)
+        _add_arg("ExclusiveStartKey", start_token)
+
         if principal_id is not None:
             _add_arg("IndexName", self.subscriber_indexname())
             _add_arg("KeyConditionExpression", Key(SUBSCRIBER_PRINCIPAL).eq(principal_id))
             _add_arg("Select", "ALL_PROJECTED_ATTRIBUTES")
 
-            return self._table.query(**args)
+            response = self._table.query(**args)
+            return self._format_list_response(response)
         elif owner_id is not None and request_status is not None:
             _add_arg("IndexName", self.owner_indexname())
             key_condition = And(Key(OWNER_PRINCIPAL).eq(owner_id), Key(STATUS).eq(request_status))
             _add_arg("KeyConditionExpression", key_condition)
             _add_arg("Select", "ALL_PROJECTED_ATTRIBUTES")
 
-            return self._table.query(**args)
+            response = self._table.query(**args)
+            return self._format_list_response(response)
         else:
             # build the filter expression
             filter_expression = self._build_filter_expression(
@@ -353,7 +362,18 @@ class SubscriberTracker:
                  TABLE_NAME: tables, REQUESTED_GRANTS: includes_grants})
             _add_arg("FilterExpression", filter_expression)
 
-            return self._table.scan(**args)
+            response = self._table.scan(**args)
+            return self._format_list_response(response)
+
+    def _format_list_response(self, response):
+        out = {
+            'Subscriptions': response.get('Items')
+        }
+        lek = 'LastEvaluatedKey'
+        if lek in response:
+            out[lek] = response.get(lek)
+
+        return out
 
     def update_status(self, subscription_id: str, status: str):
         '''

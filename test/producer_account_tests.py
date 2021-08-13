@@ -1,7 +1,14 @@
 import unittest
-from data_mesh_util import DataMeshProducer as dmp
+import sys
+import os
 import warnings
 import logging
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src/resource"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src/lib"))
+
+from data_mesh_util import DataMeshProducer as dmp
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
@@ -9,22 +16,7 @@ MESH_ACCOUNT = '887210671223'
 
 
 class DataMeshProducerAccountTests(unittest.TestCase):
-    mgr = dmp.DataMeshProducer(log_level=logging.DEBUG)
-
-    def test_setup_producer_iam_role(self):
-        self.mgr.initialize_producer_account(
-            s3_bucket="org-1-data",
-            data_mesh_account_id=MESH_ACCOUNT
-        )
-
-    def test_enable_future_sharing(self):
-        self.mgr.enable_future_sharing("blah/blah")
-
-    def test_grant_bucket_access(self):
-        self.mgr.grant_datamesh_access_to_s3(
-            s3_bucket="org-1-data",
-            data_mesh_account_id="887210671223"
-        )
+    mgr = dmp.DataMeshProducer(data_mesh_account_id=MESH_ACCOUNT, log_level=logging.DEBUG)
 
     def test_create_data_product(self):
         self.mgr.create_data_products(

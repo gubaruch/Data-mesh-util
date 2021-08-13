@@ -71,10 +71,13 @@
                 "dynamodb:BatchGetItem",
                 "dynamodb:Query",
                 "dynamodb:Scan",
-                "dynamodb:UpdateItem"
+                "dynamodb:UpdateItem",
+                "dynamodb:DescribeTable"
             ],
             "Resource": [
-                "arn:aws:dynamodb:::table/AwsDataMeshSubscribers"
+                "arn:aws:dynamodb:*:{{data_mesh_account_id}}:table/AwsDataMeshSubscriptions",
+                "arn:aws:dynamodb:*:{{data_mesh_account_id}}:table/AwsDataMeshSubscriptions/index/AwsDataMeshSubscriptions-Subscriber",
+                "arn:aws:dynamodb:*:{{data_mesh_account_id}}:table/AwsDataMeshSubscriptions/index/AwsDataMeshSubscriptions-Owner"
             ]
         }
     ]

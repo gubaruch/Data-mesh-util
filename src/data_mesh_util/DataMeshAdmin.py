@@ -192,6 +192,47 @@ class DataMeshAdmin:
             "SubscriptionTracker": self._subscription_tracker.get_endpoints()
         }
 
+    # TODO move method to CloudFormation based provisioning
+    def initialize_producer_account(self, s3_bucket: str, data_mesh_account_id: str):
+        '''
+        Sets up an AWS Account to act as a Data Provider into the central Data Mesh Account. This method should be invoked
+        by an Administrator of the Producer Account. Creates IAM Role & Policy to get and put restricted S3 Bucket Policies.
+        Requires at least 1 S3 Bucket Policy be enabled for future grants.
+        :return:
+        '''
+        self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
+        self._logger.info("Setting up Account %s as a Data Producer" % self._data_producer_account_id)
+
+        data_mesh_producer_role_arn = utils.get_datamesh_producer_role_arn(data_mesh_account_id)
+
+        # setup the producer IAM role
+        producer_iam = utils.configure_iam(
+            iam_client=self._iam_client,
+            policy_name=PRODUCER_POLICY_NAME,
+            policy_desc='IAM Policy enabling Accounts to get and put restricted S3 Bucket Policies',
+            policy_template="producer_access_catalog.pystache",
+            role_name=DATA_MESH_PRODUCER_ROLENAME,
+            role_desc='Role to be used to update S3 Bucket Policies for access by the Data Mesh Account',
+            config={"bucket": s3_bucket},
+            account_id=self._data_producer_account_id)
+
+        # now create the iam policy allowing the producer group to assume the data mesh producer role
+        policy_name = "AssumeDataMeshAdminProducer"
+        policy_arn = utils.create_assume_role_policy(
+            iam_client=self._iam_client,
+            account_id=self._data_producer_account_id,
+            policy_name=policy_name,
+            role_arn=data_mesh_producer_role_arn
+        )
+        self._logger.info("Created new IAM Policy %s" % policy_arn)
+
+        # now let the group assume the cross account role
+        group_name = "%sGroup" % DATA_MESH_PRODUCER_ROLENAME
+        self._iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
+        self._logger.info("Attached Policy to Group %s" % group_name)
+
+        return producer_iam
+
     def enable_account_as_producer(self, account_id: str):
         '''
         Enables a remote account to act as a data producer by granting them access to the DataMeshAdminProducer Role
@@ -205,9 +246,47 @@ class DataMeshAdmin:
                                     role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
         self._logger.info("Enabled Account %s to assume %s" % (account_id, DATA_MESH_ADMIN_PRODUCER_ROLENAME))
 
+    # TODO remove this method in favour of CloudFormation based init
+    def initialize_consumer_account(self):
+        '''
+        Sets up an AWS Account to act as a Data Consumer from the central Data Mesh Account. This method should be invoked
+        by an Administrator of the Consumer Account. Creates IAM Role & Policy which allows an end user to assume the
+        DataMeshAdminConsumer Role and subscribe to products.
+        :return:
+        '''
+        self._check_acct()
+        self._data_consumer_account_id = self._sts_client.get_caller_identity().get('Account')
+        self._logger.info("Setting up Account %s as a Data Consumer" % self._data_consumer_account_id)
+
+        # setup the consumer IAM role
+        consumer_iam = utils.configure_iam(
+            iam_client=self._iam_client,
+            policy_name=CONSUMER_POLICY_NAME,
+            policy_desc='IAM Policy enabling Accounts to Assume the DataMeshAdminConsumer Role',
+            policy_template="consumer_policy.pystache",
+            role_name=DATA_MESH_CONSUMER_ROLENAME,
+            role_desc='Role to be used to update S3 Bucket Policies for access by the Data Mesh Account',
+            account_id=self._data_consumer_account_id)
+
+        policy_name = "AssumeDataMeshAdminConsumer"
+        policy_arn = utils.create_assume_role_policy(
+            iam_client=self._iam_client,
+            account_id=self._data_consumer_account_id,
+            policy_name=policy_name,
+            role_arn=self._data_consumer_role_arn
+        )
+        self._logger.info("Created new IAM Policy %s" % policy_arn)
+
+        # now let the group assume the cross account role
+        group_name = "%sGroup" % DATA_MESH_CONSUMER_ROLENAME
+        self._iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
+        self._logger.info("Attached Policy to Group %s" % group_name)
+
+        return consumer_iam
+
     def enable_account_as_consumer(self, account_id: str):
         '''
-        Enables a remote account to act as a data producer by granting them access to the DataMeshAdminProducer Role
+        Enables a remote account to act as a data consumer by granting them access to the DataMeshAdminConsumer Role
         :return:
         '''
         if utils.validate_correct_account(self._iam_client, DATA_MESH_ADMIN_PRODUCER_ROLENAME) is False:
