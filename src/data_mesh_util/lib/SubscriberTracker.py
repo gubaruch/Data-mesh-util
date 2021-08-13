@@ -1,6 +1,6 @@
 import logging
 import sys
-from constants import *
+from data_mesh_util.lib.constants import *
 from boto3.dynamodb.conditions import Attr, Or, And, Key
 import shortuuid
 from datetime import datetime
@@ -178,23 +178,26 @@ class SubscriberTracker:
     def get_endpoints(self):
         return self._table_info
 
-    def _validate_object(self, database_name: str, table_name: str):
-        try:
-            response = self._glue_client.get_table(
-                DatabaseName=database_name,
-                Name=table_name
-            )
+    def _validate_object(self, database_name: str, table_name: str, suppress_object_validation: bool = False):
+        if suppress_object_validation is True:
+            return True
+        else:
+            try:
+                response = self._glue_client.get_table(
+                    DatabaseName=database_name,
+                    Name=table_name
+                )
 
-            if 'Table' not in response:
+                if 'Table' not in response:
+                    return False
+                else:
+                    return True
+            except self._glue_client.exceptions.AccessDeniedException:
+                # if we get access denied here, it's because the object doesn't exist
                 return False
-            else:
-                return True
-        except self._glue_client.exceptions.AccessDeniedException:
-            # if we get access denied here, it's because the object doesn't exist
-            return False
 
     def create_subscription_request(self, owner_account_id: str, database_name: str, tables: list, principal: str,
-                                    request_grants: list):
+                                    request_grants: list, suppress_object_validation: bool = False):
         # look up if there is already a subscription request for this object
         d = Attr(DATABASE_NAME).eq(database_name)
 
@@ -223,28 +226,35 @@ class SubscriberTracker:
 
         subscriptions = []
         if tables is None:
-            sub_id = _sub_exists(d)
-            if sub_id is not None:
-                sub_id = _generate_id()
+            # validate that the database exists
+            exists = self._validate_object(database_name=database_name,
+                                           suppress_object_validation=suppress_object_validation)
+            if not exists:
+                raise Exception("Database %s does not exist" % (database_name))
+            else:
+                sub_id = _sub_exists(d)
+                if sub_id is not None:
+                    sub_id = _generate_id()
 
-            # create a database level subscription
-            item = {
-                SUBSCRIPTION_ID: sub_id,
-                OWNER_PRINCIPAL: owner_account_id,
-                SUBSCRIBER_PRINCIPAL: principal,
-                REQUESTED_GRANTS: request_grants,
-                DATABASE_NAME: database_name
-            }
-            _create_subscription(item=item, principal=principal)
+                # create a database level subscription
+                item = {
+                    SUBSCRIPTION_ID: sub_id,
+                    OWNER_PRINCIPAL: owner_account_id,
+                    SUBSCRIBER_PRINCIPAL: principal,
+                    REQUESTED_GRANTS: request_grants,
+                    DATABASE_NAME: database_name
+                }
+                _create_subscription(item=item, principal=principal)
 
-            subscriptions.append({
-                DATABASE_NAME: database_name,
-                SUBSCRIPTION_ID: sub_id
-            })
+                subscriptions.append({
+                    DATABASE_NAME: database_name,
+                    SUBSCRIPTION_ID: sub_id
+                })
         else:
             for table_name in tables:
-                # validate if the object exists
-                exists = self._validate_object(database_name=database_name, table_name=table_name)
+                # validate if the table exists
+                exists = self._validate_object(database_name=database_name, table_name=table_name,
+                                               suppress_object_validation=suppress_object_validation)
 
                 if not exists:
                     raise Exception("Table %s does not exist in %s" % (table_name, database_name))
@@ -277,6 +287,71 @@ class SubscriberTracker:
         item = self._table.get_item(**args)
 
         return item.get("Item")
+
+    def _arg_builder(self, key: str, value):
+        if value is not None:
+            if isinstance(value, str):
+                return Attr(key).eq(value)
+            elif isinstance(value, list):
+                # for this use case, lists are OR'ed together
+                k = Attr(key)
+
+                # add the first value from the list
+                or_clause = Or(k.eq(value[0]), k.eq(value[1]))
+
+                def _or_closure(value):
+                    return Or(or_clause, k.eq(value))
+
+                for v in value[2:]:
+                    _or_closure(v)
+
+                return or_clause
+        else:
+            return None
+
+    def _build_filter_expression(self, args: dict):
+        filter = None
+
+        for arg in args.items():
+            if arg[1] is not None:
+                if filter is None:
+                    filter = Attr(arg[0]).eq(arg[1])
+                else:
+                    filter = And(filter, Attr(arg[0]).eq(arg[1]))
+
+        return filter
+
+    def list_subscriptions(self, owner_id: str = None, principal_id: str = None, database_name: str = None,
+                           tables: list = None, includes_grants: list = None, request_status: str = None):
+        args = {}
+
+        def _add_arg(key: str, value):
+            if value is not None:
+                args[key] = value
+
+        # determine if we are looking up by owner or subscriber, meaning we can query
+        _add_arg("TableName", SUBSCRIPTIONS_TRACKER_TABLE)
+        if principal_id is not None:
+            _add_arg("IndexName", self.subscriber_indexname())
+            _add_arg("KeyConditionExpression", Key(SUBSCRIBER_PRINCIPAL).eq(principal_id))
+            _add_arg("Select", "ALL_PROJECTED_ATTRIBUTES")
+
+            return self._table.query(**args)
+        elif owner_id is not None and request_status is not None:
+            _add_arg("IndexName", self.owner_indexname())
+            key_condition = And(Key(OWNER_PRINCIPAL).eq(owner_id), Key(STATUS).eq(request_status))
+            _add_arg("KeyConditionExpression", key_condition)
+            _add_arg("Select", "ALL_PROJECTED_ATTRIBUTES")
+
+            return self._table.query(**args)
+        else:
+            # build the filter expression
+            filter_expression = self._build_filter_expression(
+                {OWNER_PRINCIPAL: owner_id, SUBSCRIBER_PRINCIPAL: principal_id, DATABASE_NAME: database_name,
+                 TABLE_NAME: tables, REQUESTED_GRANTS: includes_grants})
+            _add_arg("FilterExpression", filter_expression)
+
+            return self._table.scan(**args)
 
     def update_status(self, subscription_id: str, status: str):
         '''

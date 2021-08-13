@@ -3,7 +3,7 @@ try:
 except ImportError:
     from collections import Mapping  # noqa
 
-from constants import *
+from data_mesh_util.lib.constants import *
 import json
 import os
 import pystache
