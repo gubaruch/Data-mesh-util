@@ -40,6 +40,7 @@ class SubscriberTrackerTests(unittest.TestCase):
             listed_subs = self._subscription_tracker.list_subscriptions(**args).get("Items")
             self.assertGreaterEqual(len(listed_subs), c)
 
+        # Walk the tree of args
         _list_subs({"owner_id": MESH_ACCOUNT})
         _list_subs({"owner_id": MESH_ACCOUNT, "principal_id": CONSUMER_ACCOUNT})
         _list_subs({"owner_id": MESH_ACCOUNT, "principal_id": CONSUMER_ACCOUNT, "database_name": "Test"})
@@ -48,6 +49,13 @@ class SubscriberTrackerTests(unittest.TestCase):
         _list_subs(
             {"owner_id": MESH_ACCOUNT, "principal_id": CONSUMER_ACCOUNT, "database_name": "Test", "tables": ["Test3"],
              "includes_grants": ["DESCRIBE"]})
+        _list_subs(
+            {"owner_id": MESH_ACCOUNT, "principal_id": CONSUMER_ACCOUNT, "database_name": "Test", "tables": ["Test3"],
+             "includes_grants": ["DESCRIBE"], "request_status": "PENDING"})
+
+        # tests just for those conditions where we have indexes
+        _list_subs({"principal_id": CONSUMER_ACCOUNT})
+        _list_subs({"owner_id": MESH_ACCOUNT, "request_status": "Pending"})
 
         # delete the subscriptions
         ddb = boto3.resource('dynamodb', region_name=self._current_region)

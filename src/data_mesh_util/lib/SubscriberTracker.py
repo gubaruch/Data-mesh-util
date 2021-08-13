@@ -242,7 +242,8 @@ class SubscriberTracker:
                     OWNER_PRINCIPAL: owner_account_id,
                     SUBSCRIBER_PRINCIPAL: principal,
                     REQUESTED_GRANTS: request_grants,
-                    DATABASE_NAME: database_name
+                    DATABASE_NAME: database_name,
+                    STATUS: STATUS_PENDING
                 }
                 _create_subscription(item=item, principal=principal)
 
@@ -269,7 +270,8 @@ class SubscriberTracker:
                         SUBSCRIBER_PRINCIPAL: principal,
                         REQUESTED_GRANTS: request_grants,
                         DATABASE_NAME: database_name,
-                        TABLE_NAME: table_name
+                        TABLE_NAME: table_name,
+                        STATUS: STATUS_PENDING
                     }
                     _create_subscription(item=item, principal=principal)
 
