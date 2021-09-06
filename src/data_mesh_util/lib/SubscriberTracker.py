@@ -104,7 +104,7 @@ class SubscriberTracker:
         # check that the updates haven't already been added
         if "#upd_dt" not in list(args.get("ExpressionAttributeNames").keys()):
             # split the update expression and extract the SET portion, which we will rewrite
-            tokens = re.split('(ADD|SET)', args.get("UpdateExpression"))
+            tokens = re.split('(ADD|SET)', args.get("UpdateExpression"), flags=re.IGNORECASE)
             set_clause = tokens[tokens.index('SET') + 1]
             add_clause = tokens[tokens.index('ADD') + 1]
 

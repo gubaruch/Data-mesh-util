@@ -363,7 +363,7 @@ def create_crawler(glue_client, crawler_role: str, database_name: str, table_nam
                     },
                 ]
             },
-            Schedule=sync_schedule,
+            Schedule="cron(0 */4 * * ? *)" if sync_schedule is None else sync_schedule,
             SchemaChangePolicy={
                 'UpdateBehavior': 'LOG',
                 'DeleteBehavior': 'LOG'
