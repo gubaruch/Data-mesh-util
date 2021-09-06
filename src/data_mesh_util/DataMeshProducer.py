@@ -323,6 +323,8 @@ class DataMeshProducer:
         data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
                                                     credentials=self._data_mesh_sts_session.get('Credentials'))
 
+        current_account = boto3.client('sts').get_caller_identity()
+
         # load the specified tables to be created as data products
         all_tables = self._load_glue_tables(
             glue_client=producer_glue_client,
@@ -391,6 +393,7 @@ class DataMeshProducer:
 
     def approve_access_request(self, request_id: str,
                                grant_permissions: list = None,
+                               grantable_permissions: list = None,
                                decision_notes: str = None):
         '''
         API to close an access request as approved. Approvals must be accompanied by the
@@ -400,6 +403,28 @@ class DataMeshProducer:
         :param decision_notes:
         :return:
         '''
+        # load the subscription
+        subscription = self._subscription_tracker.get_subscription(subscription_id=request_id)
+
+        # approver can override the requested grants
+        if grant_permissions is None:
+            set_permissions = subscription.get(REQUESTED_GRANTS)
+        else:
+            set_permissions = grant_permissions
+
+        # grant the approved permissions in lake formation
+        data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
+                                                    credentials=self._data_mesh_sts_session.get('Credentials'))
+        tables = subscription.get(TABLE_NAME)
+        for t in tables:
+            utils.lf_grant_permissions(lf_client=data_mesh_lf_client,
+                                       principal=subscription.get(SUBSCRIBER_PRINCIPAL),
+                                       database_name=subscription.get(DATABASE_NAME),
+                                       table_name=t,
+                                       permissions=set_permissions,
+                                       grantable_permissions=grantable_permissions, logger=self._logger)
+
+        # update the subscription to reflect the changes
         return self._subscription_tracker.update_status(
             subscription_id=request_id, status=STATUS_ACTIVE,
             permitted_grants=grant_permissions, notes=decision_notes
@@ -438,7 +463,4 @@ class DataMeshProducer:
         :param reason:
         :return:
         '''
-        return self._subscription_tracker.update_status(
-            subscription_id=subscription_id, status=STATUS_DELETED,
-            notes=reason
-        )
+        return self._subscription_tracker.delete_subscription(subscription_id=subscription_id, reason=reason)

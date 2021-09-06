@@ -1,6 +1,6 @@
 import logging
 import sys
-import time
+import re
 from data_mesh_util.lib.constants import *
 from boto3.dynamodb.conditions import Attr, Or, And, Key
 import shortuuid
@@ -35,32 +35,12 @@ def _format_time_now():
     return datetime.now().strftime(DATE_FORMAT)
 
 
-def _add_www(item: dict, principal: str, new: bool = True, notes: str = None):
-    '''
-    Method to decorate a DynamoDB item with Who What When attributes
-    :param item:
-    :param principal:
-    :param new:
-    :return:
-    '''
-    if new:
-        item[CREATION_DATE] = _format_time_now()
-        item[CREATED_BY] = principal
-    else:
-        item[UPDATED_DATE] = _format_time_now()
-        item[UPDATED_BY] = principal
-
-    if notes is not None:
-        item[NOTES] = notes
-
-    return item
-
-
 class SubscriberTracker:
     _data_mesh_account_id = None
     _dynamo_client = None
     _dynamo_resource = None
     _glue_client = None
+    _sts_client = None
     _table_info = None
     _table = None
     _logger = None
@@ -83,6 +63,8 @@ class SubscriberTracker:
                                                   credentials=credentials)
         self._iam_client = utils.generate_client(service='iam', region=region_name,
                                                  credentials=credentials)
+        self._sts_client = utils.generate_client(service='sts', region=region_name,
+                                                 credentials=credentials)
 
         # validate that we are running from within the mesh
         utils.validate_correct_account(credentials=credentials, account_id=data_mesh_account_id)
@@ -94,6 +76,48 @@ class SubscriberTracker:
         # make sure we always log to standard out
         _logger.addHandler(logging.StreamHandler(sys.stdout))
         _logger.setLevel(log_level)
+
+    def _who_am_i(self):
+        return self._sts_client.get_caller_identity().get('Arn')
+
+    def _add_www(self, item: dict, new: bool = True, notes: str = None):
+        '''
+        Method to decorate a DynamoDB item with Who What When attributes
+        :param item:
+        :param principal:
+        :param new:
+        :return:
+        '''
+        if new:
+            item[CREATION_DATE] = _format_time_now()
+            item[CREATED_BY] = self._who_am_i()
+        else:
+            item[UPDATED_DATE] = _format_time_now()
+            item[UPDATED_BY] = self._who_am_i()
+
+        if notes is not None:
+            item[NOTES] = notes
+
+        return item
+
+    def _upd_www(self, args: dict):
+        # check that the updates haven't already been added
+        if "#upd_dt" not in list(args.get("ExpressionAttributeNames").keys()):
+            # split the update expression and extract the SET portion, which we will rewrite
+            tokens = re.split('(ADD|SET)', args.get("UpdateExpression"))
+            set_clause = tokens[tokens.index('SET') + 1]
+            add_clause = tokens[tokens.index('ADD') + 1]
+
+            # add the update expression, names, and values
+            set_clause = "%s, #upd_dt = :upd_dt, #upd_by = :upd_by" % set_clause
+            args["ExpressionAttributeNames"]["#upd_dt"] = UPDATED_DATE
+            args["ExpressionAttributeNames"]["#upd_by"] = UPDATED_BY
+            args["ExpressionAttributeValues"][":upd_dt"] = _format_time_now()
+            args["ExpressionAttributeValues"][":upd_by"] = self._who_am_i()
+
+            args["UpdateExpression"] = "SET %s ADD %s" % (set_clause, add_clause)
+
+            return args
 
     def _init_table(self):
         t = None
@@ -193,6 +217,15 @@ class SubscriberTracker:
     def get_endpoints(self):
         return self._table_info
 
+    def _validate_objects(self, database_name: str, tables: list, suppress_object_validation: bool = False):
+        for table_name in tables:
+            # validate if the table exists
+            exists = self._validate_object(database_name=database_name, table_name=table_name,
+                                           suppress_object_validation=suppress_object_validation)
+
+            if not exists:
+                raise Exception("Table %s does not exist in Database %s" % (table_name, database_name))
+
     def _validate_object(self, database_name: str, table_name: str, suppress_object_validation: bool = False):
         if suppress_object_validation is True:
             return True
@@ -207,14 +240,16 @@ class SubscriberTracker:
                     return False
                 else:
                     return True
-            except self._glue_client.exceptions.AccessDeniedException:
+            except (
+                    self._glue_client.exceptions.AccessDeniedException,
+                    self._glue_client.exceptions.EntityNotFoundException):
                 # if we get access denied here, it's because the object doesn't exist
                 return False
 
     def create_subscription_request(self, owner_account_id: str, database_name: str, tables: list, principal: str,
                                     request_grants: list, suppress_object_validation: bool = False):
         # look up if there is already a subscription request for this object
-        d = Attr(DATABASE_NAME).eq(database_name)
+        database_attr = Attr(DATABASE_NAME).eq(database_name)
 
         def _sub_exists(filter):
             found = self._table.query(
@@ -233,13 +268,12 @@ class SubscriberTracker:
 
         def _create_subscription(item, principal):
             # generate a new subscription
-            item = _add_www(item=item, principal=principal)
+            item = self._add_www(item=item)
 
             self._table.put_item(
                 Item=item
             )
 
-        subscriptions = []
         if tables is None:
             # validate that the database exists
             exists = self._validate_object(database_name=database_name,
@@ -247,7 +281,7 @@ class SubscriberTracker:
             if not exists:
                 raise Exception("Database %s does not exist" % (database_name))
             else:
-                sub_id = _sub_exists(d)
+                sub_id = _sub_exists(database_attr)
                 if sub_id is not None:
                     sub_id = _generate_id()
 
@@ -262,35 +296,33 @@ class SubscriberTracker:
                 }
                 _create_subscription(item=item, principal=principal)
 
-                subscriptions.append({
+                return {
                     DATABASE_NAME: database_name,
                     SUBSCRIPTION_ID: sub_id
-                })
+                }
         else:
-            for table_name in tables:
-                # validate if the table exists
-                exists = self._validate_object(database_name=database_name, table_name=table_name,
-                                               suppress_object_validation=suppress_object_validation)
+            # validate the table list
+            self._validate_objects(database_name=database_name, tables=tables,
+                                   suppress_object_validation=suppress_object_validation)
 
-                if not exists:
-                    raise Exception("Table %s does not exist in %s" % (table_name, database_name))
-                else:
-                    subscription_id = _sub_exists(And(d, Attr(TABLE_NAME).eq(table_name)))
-                    if subscription_id is None:
-                        subscription_id = _generate_id()
+            # check if a subscription already exists
+            subscription_id = _sub_exists(Attr(TABLE_NAME).is_in(tables))
 
-                    item = {
-                        SUBSCRIPTION_ID: subscription_id,
-                        OWNER_PRINCIPAL: owner_account_id,
-                        SUBSCRIBER_PRINCIPAL: principal,
-                        REQUESTED_GRANTS: request_grants,
-                        DATABASE_NAME: database_name,
-                        TABLE_NAME: table_name,
-                        STATUS: STATUS_PENDING
-                    }
-                    _create_subscription(item=item, principal=principal)
+            if subscription_id is None:
+                subscription_id = _generate_id()
 
-                    subscriptions.append({TABLE_NAME: table_name, SUBSCRIPTION_ID: subscription_id})
+            item = {
+                SUBSCRIPTION_ID: subscription_id,
+                OWNER_PRINCIPAL: owner_account_id,
+                SUBSCRIBER_PRINCIPAL: principal,
+                REQUESTED_GRANTS: request_grants,
+                DATABASE_NAME: database_name,
+                TABLE_NAME: tables,
+                STATUS: STATUS_PENDING
+            }
+            _create_subscription(item=item, principal=principal)
+
+            return {TABLE_NAME: tables, SUBSCRIPTION_ID: subscription_id}
 
         return subscriptions
 
@@ -401,7 +433,10 @@ class SubscriberTracker:
         # add the consumed capacity metric which allows us to check if the update worked
         if "ReturnConsumedCapacity" not in args:
             args["ReturnConsumedCapacity"] = 'TOTAL'
-            
+
+        # add who information
+        args = self._upd_www(args)
+
         try:
             response = self._table.update_item(**args)
 
@@ -413,12 +448,18 @@ class SubscriberTracker:
         except self._dynamo_client.exceptions.ConditionalCheckFailedException:
             raise Exception(ist)
 
+    def delete_subscription(self, subscription_id: str, reason: str):
+        self.update_status(
+            subscription_id=subscription_id, status=STATUS_DELETED,
+            notes=reason
+        )
+
     def update_grants(self, subscription_id: str, permitted_grants: list, notes: str):
         args = {
             "Key": {
                 SUBSCRIPTION_ID: subscription_id
             },
-            "UpdateExpression": "set #permitted = :permitted add #notes :notes",
+            "UpdateExpression": "SET #permitted = :permitted ADD #notes :notes",
             "ExpressionAttributeNames": {
                 "#permitted": PERMITTED_GRANTS,
                 "#notes": NOTES

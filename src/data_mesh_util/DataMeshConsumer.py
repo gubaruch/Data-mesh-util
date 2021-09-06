@@ -47,6 +47,7 @@ class DataMeshConsumer:
         self._logger.debug("Created new STS Session for Data Mesh Admin Consumer")
         self._logger.debug(self._data_mesh_sts_session)
         self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_sts_session.get('Credentials'),
+                                                       data_mesh_account_id=data_mesh_account_id,
                                                        region_name=self._current_region,
                                                        log_level=self._log_level)
 
@@ -58,8 +59,8 @@ class DataMeshConsumer:
 
     def _check_acct(self):
         # validate that we are being run within the correct account
-        if utils.validate_correct_account(self._iam_client, DATA_MESH_ADMIN_CONSUMER_ROLENAME) is False:
-            raise Exception("Function should be run in the Data Consumer Account")
+        utils.validate_correct_account(credentials=self._data_mesh_sts_session.get('Credentials'),
+                                       account_id=self._data_mesh_account_id)
 
     def request_access_to_product(self, owner_account_id: str, database_name: str,
                                   request_permissions: list, tables: list = None, requesting_principal: str = None):

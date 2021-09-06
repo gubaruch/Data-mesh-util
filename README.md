@@ -1,9 +1,9 @@
 # AWS Data Mesh Helper Library
 
 The AWS Data Mesh Helper library provides automation around the most common tasks that customers need to perform to implement
-a data mesh architecture on AWS. A data mesh on AWS uses a central AWS Account (the `mesh account`) to store the metadata
-associated with `data products` created by `data producers`. This allows other AWS Accounts to act as `consumers`, and to
-request `subscriptions`, which must be approved by producers. Upon approval, the approved grants are provided to the consumer
+a data mesh architecture on AWS. A data mesh on AWS uses a central AWS Account (the mesh account) to store the metadata
+associated with __Data Products__ created by data __Producers__. This allows other AWS Accounts to act as __Consumers__, and to
+request __Subscriptions__, which must be approved by __Producers__. Upon approval, the approved grants are provided to the __Consumer__
 and can be used within their AWS Account.
 
 ### Definition of Terms

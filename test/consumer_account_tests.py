@@ -19,6 +19,16 @@ DATABASE_NAME = "tpcds-%s" % PRODUCER_ACCOUNT
 
 
 class ConsumerAccountTests(unittest.TestCase):
+    '''
+    Tests for consumer functionality including creating subscriptions, both positive and negative cases, as well as retirement.
+    Should be run using credentials for a principal who can assume
+    the DataMeshAdminConsumer role in the data mesh. Requires environment variables:
+
+    AWS_REGION
+    AWS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY
+    AWS_SESSION_TOKEN (Optional)
+    '''
     _mgr = dmc.DataMeshConsumer(data_mesh_account_id=MESH_ACCOUNT, log_level=logging.DEBUG)
     _logger = logging.getLogger("DataMeshConsumer")
 
@@ -34,7 +44,7 @@ class ConsumerAccountTests(unittest.TestCase):
         self._logger.info('Subscription %s' % sub)
 
         # now fetch the subscription
-        sub_id = sub[0].get("SubscriptionId")
+        sub_id = sub.get("SubscriptionId")
         subscription = self._mgr.get_subscription(sub_id)
         self.assertIsNotNone(subscription)
         self.assertEqual(subscription.get("SubscriptionId"), sub_id)

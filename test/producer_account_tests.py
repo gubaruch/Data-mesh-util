@@ -52,35 +52,3 @@ class DataMeshProducerAccountTests(unittest.TestCase):
             sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",
             sync_mesh_crawler_role_arn="arn:aws:iam::600214582022:role/service-role/AWSGlueServiceRole-Crawler"
         )
-
-    def test_subscription_lifecycle(self):
-        # create a subscription
-        set_grants = ['DESCRIBE', 'SELECT']
-        subscription_id = self._subscription_tracker.create_subscription_request(
-            owner_account_id=MESH_ACCOUNT,
-            database_name="Test",
-            tables=["test"],
-            principal=CONSUMER_ACCOUNT,
-            request_grants=set_grants,
-            suppress_object_validation=True
-        )[0].get("SubscriptionId")
-
-        # status should be Pending
-        sub = self._subscription_tracker.get_subscription(subscription_id=subscription_id)
-        self.assertEqual(sub.get(STATUS), STATUS_PENDING)
-
-        # now update the status to approved
-        self._mgr.approve_access_request(request_id=subscription_id, decision_notes='OK')
-
-        # status should be Pending, notes should match, and permissions should be as requested
-        sub = self._subscription_tracker.get_subscription(subscription_id=subscription_id)
-        self.assertEqual(sub.get(STATUS), STATUS_ACTIVE)
-        self.assertEqual(sub.get(NOTES), {'OK'})
-        self.assertListEqual(sub.get(PERMITTED_GRANTS), set_grants)
-
-        # add some more grants
-        new_grants = ['SELECT', 'DESCRIBE', 'INSERT']
-        self._subscription_tracker.update_grants(subscription_id=subscription_id, permitted_grants=new_grants,
-                                                 notes="Yolo")
-        sub = self._subscription_tracker.get_subscription(subscription_id=subscription_id)
-        self.assertListEqual(sub.get(PERMITTED_GRANTS), new_grants)
