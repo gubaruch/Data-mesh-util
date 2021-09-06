@@ -72,6 +72,7 @@
                 "dynamodb:Query",
                 "dynamodb:Scan",
                 "dynamodb:UpdateItem",
+                "dynamodb:PutItem",
                 "dynamodb:DescribeTable"
             ],
             "Resource": [

@@ -296,11 +296,3 @@ class DataMeshAdmin:
         utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
                                     role_name=DATA_MESH_ADMIN_CONSUMER_ROLENAME)
         self._logger.info("Enabled Account %s to assume %s" % (account_id, DATA_MESH_ADMIN_CONSUMER_ROLENAME))
-
-    def list_data_access(self, database_name: str = None, table_name: str = None, granted_principal: str = None,
-                         grant_date_start: str = None, grant_date_end: str = None):
-        '''
-        API which returns data accesses granted or pending, based upon the supplied filters
-        :return:
-        '''
-        pass

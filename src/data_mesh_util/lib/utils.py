@@ -17,12 +17,12 @@ def make_iam_session_name(current_account):
         'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
 
 
-def validate_correct_account(iam_client, role_must_exist: str):
-    try:
-        iam_client.get_role(RoleName=role_must_exist)
-        return True
-    except iam_client.exceptions.NoSuchEntityException:
-        return False
+def validate_correct_account(credentials, account_id: str):
+    caller_account = generate_client(service='sts', region=None, credentials=credentials).get_caller_identity().get(
+        'Account')
+    if caller_account != account_id:
+        raise Exception(
+            "Subscription Tracker must run within the Data Mesh Account (%s) and not %s" % (account_id, caller_account))
 
 
 def generate_policy(template_file: str, config: dict):
@@ -260,10 +260,12 @@ def generate_client(service: str, region: str, credentials):
     use_creds = _validate_credentials(credentials)
     args = {
         "service_name": service,
-        "region_name": region,
         "aws_access_key_id": use_creds.get('AccessKeyId'),
         "aws_secret_access_key": use_creds.get('SecretAccessKey')
     }
+    if region is not None:
+        args["region_name"] = region
+
     if 'SessionToken' in use_creds:
         args['aws_session_token'] = use_creds.get('SessionToken')
 

@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 from data_mesh_util.lib.constants import *
 from boto3.dynamodb.conditions import Attr, Or, And, Key
 import shortuuid
@@ -22,6 +23,8 @@ DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 DATABASE_NAME = 'DatabaseName'
 TABLE_NAME = 'TableName'
 REQUESTED_GRANTS = 'RequestedGrants'
+PERMITTED_GRANTS = 'PermittedGrants'
+NOTES = 'Notes'
 
 
 def _generate_id():
@@ -32,7 +35,7 @@ def _format_time_now():
     return datetime.now().strftime(DATE_FORMAT)
 
 
-def _add_www(item: dict, principal: str, new: bool = True):
+def _add_www(item: dict, principal: str, new: bool = True, notes: str = None):
     '''
     Method to decorate a DynamoDB item with Who What When attributes
     :param item:
@@ -47,10 +50,14 @@ def _add_www(item: dict, principal: str, new: bool = True):
         item[UPDATED_DATE] = _format_time_now()
         item[UPDATED_BY] = principal
 
+    if notes is not None:
+        item[NOTES] = notes
+
     return item
 
 
 class SubscriberTracker:
+    _data_mesh_account_id = None
     _dynamo_client = None
     _dynamo_resource = None
     _glue_client = None
@@ -59,13 +66,14 @@ class SubscriberTracker:
     _logger = None
     _region = None
 
-    def __init__(self, credentials, region_name: str, log_level: str = "INFO"):
+    def __init__(self, credentials, data_mesh_account_id: str, region_name: str, log_level: str = "INFO"):
         '''
         Initialize a subscriber tracker. Requires the external creation of clients because we will span roles
         :param dynamo_client:
         :param dynamo_resource:
         :param log_level:
         '''
+        self._data_mesh_account_id = data_mesh_account_id
         self._region = region_name
         self._dynamo_client = utils.generate_client(service='dynamodb', region=region_name,
                                                     credentials=credentials)
@@ -73,6 +81,12 @@ class SubscriberTracker:
                                                         credentials=credentials)
         self._glue_client = utils.generate_client(service='glue', region=region_name,
                                                   credentials=credentials)
+        self._iam_client = utils.generate_client(service='iam', region=region_name,
+                                                 credentials=credentials)
+
+        # validate that we are running from within the mesh
+        utils.validate_correct_account(credentials=credentials, account_id=data_mesh_account_id)
+
         self._table_info = self._init_table()
 
         _logger = logging.getLogger("SubscriberTracker")
@@ -146,7 +160,7 @@ class SubscriberTracker:
                         }
                     ],
                     'Projection': {
-                        'ProjectionType': 'KEYS_ONLY'
+                        'ProjectionType': 'ALL'
                     }
                 },
                 {
@@ -158,10 +172,7 @@ class SubscriberTracker:
                         }
                     ],
                     'Projection': {
-                        'ProjectionType': 'INCLUDE',
-                        'NonKeyAttributes': [
-                            DATABASE_NAME, TABLE_NAME
-                        ]
+                        'ProjectionType': 'ALL'
                     }
                 }
             ],
@@ -172,6 +183,10 @@ class SubscriberTracker:
             },
             Tags=DEFAULT_TAGS
         )
+
+        # block until the table is ACTIVE
+        t = self._dynamo_resource.Table(SUBSCRIPTIONS_TRACKER_TABLE)
+        t.wait_until_exists()
 
         return response.get('TableDescription')
 
@@ -286,11 +301,15 @@ class SubscriberTracker:
             },
             "ConsistentRead": True
         }
+
         item = self._table.get_item(**args)
 
         i = item.get("Item")
-        if not (DELETED in i or i.get(STATUS) == STATUS_DELETED) or force:
-            return i
+        if i is None:
+            return None
+        else:
+            if i.get(STATUS) != STATUS_DELETED or force:
+                return i
 
     def _arg_builder(self, key: str, value):
         if value is not None:
@@ -344,6 +363,7 @@ class SubscriberTracker:
             _add_arg("IndexName", self.subscriber_indexname())
             _add_arg("KeyConditionExpression", Key(SUBSCRIBER_PRINCIPAL).eq(principal_id))
             _add_arg("Select", "ALL_PROJECTED_ATTRIBUTES")
+            _add_arg("FilterExpression", Attr(STATUS).ne(STATUS_DELETED))
 
             response = self._table.query(**args)
             return self._format_list_response(response)
@@ -375,42 +395,96 @@ class SubscriberTracker:
 
         return out
 
-    def update_status(self, subscription_id: str, status: str):
+    def _handle_update(self, args: dict):
+        ist = "Invalid State Transition"
+
+        # add the consumed capacity metric which allows us to check if the update worked
+        if "ReturnConsumedCapacity" not in args:
+            args["ReturnConsumedCapacity"] = 'TOTAL'
+            
+        try:
+            response = self._table.update_item(**args)
+
+            if response is None or response.get('ConsumedCapacity') is None or response.get('ConsumedCapacity').get(
+                    'CapacityUnits') == 0:
+                raise Exception(ist)
+            else:
+                return True
+        except self._dynamo_client.exceptions.ConditionalCheckFailedException:
+            raise Exception(ist)
+
+    def update_grants(self, subscription_id: str, permitted_grants: list, notes: str):
+        args = {
+            "Key": {
+                SUBSCRIPTION_ID: subscription_id
+            },
+            "UpdateExpression": "set #permitted = :permitted add #notes :notes",
+            "ExpressionAttributeNames": {
+                "#permitted": PERMITTED_GRANTS,
+                "#notes": NOTES
+            },
+            "ExpressionAttributeValues": {
+                ":permitted": permitted_grants,
+                ":notes": {notes}
+            }
+        }
+
+        return self._handle_update(args)
+
+    def update_status(self, subscription_id: str, status: str, permitted_grants: list = None, notes: str = None):
         '''
         Updates the status of a subscription. Valid transitions are:
         PENDING->ACTIVE
         PENDING->DENIED
         DENIED->ACTIVE
         ACTIVE->DELETED
+        DELETED->ACTIVE
+        DELETED->PENDING
 
         :param subscription_id:
         :param status:
         :return:
         '''
         # build the map of proposed status to allowed status
+        status_attr = Attr(STATUS)
+        expected = None
         if status == STATUS_ACTIVE:
-            expected = Or(Attr(STATUS).eq(STATUS_PENDING), Attr(STATUS).eq(STATUS_DENIED))
+            expected = Or(Or(status_attr.eq(STATUS_PENDING), status_attr.eq(STATUS_DENIED)),
+                          status_attr.eq(STATUS_DELETED))
         elif status == STATUS_DENIED:
-            expected = Attr(STATUS).eq(STATUS_PENDING)
+            expected = status_attr.eq(STATUS_PENDING)
         elif status == STATUS_DELETED:
-            expected = Attr(STATUS).eq(STATUS_ACTIVE)
+            expected = status_attr.eq(STATUS_ACTIVE)
+        elif status == STATUS_PENDING:
+            expected = status_attr.eq(STATUS_DELETED)
 
-        response = self._table.update_item(
-            Key={
+        args = {
+            "Key": {
                 SUBSCRIPTION_ID: subscription_id
             },
-            UpdateExpression="set :status = #status",
-            ExpressionAttributeNames={
-                ":status": STATUS
+            "UpdateExpression": "SET #status = :status, #permitted = :permitted",
+            "ExpressionAttributeNames": {
+                "#status": STATUS,
+                "#permitted": PERMITTED_GRANTS
             },
-            ExpressionAttributeValues={
-                "#status": status
+            "ExpressionAttributeValues": {
+                ":status": status
             },
-            ConditionExpression=expected
-        )
+            "ConditionExpression": expected
+        }
 
-        if response is None or response.get('ConsumedCapacity') is None or response.get('ConsumedCapacity').get(
-                'CapacityUnits') == 0:
-            raise Exception("Invalid State Transition")
+        # add the permitted grants if they are provided
+        if permitted_grants is not None and len(permitted_grants > 0):
+            args["ExpressionAttributeValues"][":permitted"] = permitted_grants
         else:
-            return True
+            # permitted grants will be set to whatever was previously requested
+            current_sub = self.get_subscription(subscription_id=subscription_id)
+            args["ExpressionAttributeValues"][":permitted"] = current_sub.get(REQUESTED_GRANTS)
+
+        # add the notes field as a set if we got any
+        if notes is not None:
+            args["UpdateExpression"] = "%s %s" % (args["UpdateExpression"], " ADD #notes :notes")
+            args["ExpressionAttributeNames"]["#notes"] = NOTES
+            args["ExpressionAttributeValues"][":notes"] = {notes}
+
+        return self._handle_update(args)

@@ -15,7 +15,6 @@ import data_mesh_util.lib.utils as utils
 from data_mesh_util.lib.SubscriberTracker import *
 
 
-
 class DataMeshProducer:
     _data_mesh_account_id = None
     _data_producer_account_id = None
@@ -32,6 +31,7 @@ class DataMeshProducer:
     _data_producer_role_arn = None
     _data_mesh_sts_session = None
     _subscription_tracker = None
+    _current_account = None
 
     def __init__(self, data_mesh_account_id: str, log_level: str = "INFO"):
         self._data_mesh_account_id = data_mesh_account_id
@@ -44,20 +44,15 @@ class DataMeshProducer:
 
         self._logger.setLevel(log_level)
 
-        current_account = self._sts_client.get_caller_identity()
-        session_name = utils.make_iam_session_name(current_account)
+        self._current_account = self._sts_client.get_caller_identity()
+        session_name = utils.make_iam_session_name(self._current_account)
         self._data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=data_mesh_account_id)
         self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_producer_role_arn,
                                                                    RoleSessionName=session_name)
         self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_sts_session.get('Credentials'),
+                                                       data_mesh_account_id=data_mesh_account_id,
                                                        region_name=self._current_region,
                                                        log_level=log_level)
-
-    def _check_acct(self, override_acct: str = None):
-        # validate that we are being run within the correct account
-        if utils.validate_correct_account(self._iam_client,
-                                          DATA_MESH_PRODUCER_ROLENAME if override_acct is None else override_acct) is False:
-            raise Exception("Function should be run in the Data Domain Producer Account")
 
     # TODO Deprecate this method as we don't need it due to using lakeformation permissions
     def enable_future_sharing(self, s3_bucket: str):
@@ -67,11 +62,6 @@ class DataMeshProducer:
         :param s3_bucket:
         :return:
         '''
-        self._check_acct()
-
-        self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
-        self._logger.info("Class bound to Account %s" % self._data_producer_account_id)
-
         # get the producer policy
         arn = "arn:aws:iam::%s:policy%s%s" % (
             self._data_producer_account_id, DATA_MESH_IAM_PATH, PRODUCER_POLICY_NAME)
@@ -99,7 +89,6 @@ class DataMeshProducer:
         else:
             self._logger.info("No Action Required. Bucket access already enabled.")
 
-    # TODO Deprecate this method as we don't need it due to using lakeformation permissions
     def grant_datamesh_access_to_s3(self, s3_bucket: str, data_mesh_account_id: str):
         '''
         Grants the data mesh account access to S3 through a bucket policy grant
@@ -107,10 +96,6 @@ class DataMeshProducer:
         :param data_mesh_account_id:
         :return:
         '''
-        self._check_acct()
-        self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
-        self._logger.info("Class bound to Account %s" % self._data_producer_account_id)
-
         # create a data lake location
         lf_client = boto3.client('lakeformation', region_name=self._current_region)
         s3_arn = "arn:aws:s3:::%s" % s3_bucket
@@ -218,7 +203,7 @@ class DataMeshProducer:
         return t
 
     def _create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
-                           producer_glue_client: str, data_mesh_database_name: str, producer_account_id: str,
+                           producer_glue_client, data_mesh_database_name: str, producer_account_id: str,
                            data_mesh_account_id: str):
         '''
         API to create a table as a data product in the data mesh
@@ -232,8 +217,6 @@ class DataMeshProducer:
         :param data_mesh_account_id:
         :return:
         '''
-        self._check_acct()
-
         # cleanup the TableInfo object to be usable as a TableInput
         t = self._cleanup_table_def(table_def)
 
@@ -329,36 +312,16 @@ class DataMeshProducer:
     def create_data_products(self, data_mesh_account_id: str, source_database_name: str,
                              table_name_regex: str = None, sync_mesh_catalog_schedule: str = None,
                              sync_mesh_crawler_role_arn: str = None):
-        '''
-        Creates a copy of a local set of objects within the data mesh account and sets up synchronisation between the
-        two accounts.
-        :param data_mesh_producer_role_arn:
-        :param source_database_name:
-        :param target_database_name:
-        :param table_name_regex:
-        :return:
-        '''
-        self._check_acct()
-
-        # assume the data mesh admin producer role. if this fails, then the requesting identity is wrong
-        data_mesh_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=data_mesh_account_id)
-        current_account = self._sts_client.get_caller_identity()
-        session_name = utils.make_iam_session_name(current_account)
-        data_mesh_sts_session = self._sts_client.assume_role(RoleArn=data_mesh_producer_role_arn,
-                                                             RoleSessionName=session_name)
-        self._logger.debug("Created new STS Session for Data Mesh Admin Producer")
-        self._logger.debug(data_mesh_sts_session)
-
         # generate the target database name for the mesh
-        data_mesh_database_name = "%s-%s" % (source_database_name, current_account.get('Account'))
+        data_mesh_database_name = "%s-%s" % (source_database_name, self._current_account.get('Account'))
 
         # create clients for the current account and with the new credentials in the data mesh account
         producer_glue_client = boto3.client('glue', region_name=self._current_region)
         producer_ram_client = boto3.client('ram', region_name=self._current_region)
         data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
-                                                      credentials=data_mesh_sts_session.get('Credentials'))
+                                                      credentials=self._data_mesh_sts_session.get('Credentials'))
         data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
-                                                    credentials=data_mesh_sts_session.get('Credentials'))
+                                                    credentials=self._data_mesh_sts_session.get('Credentials'))
 
         # load the specified tables to be created as data products
         all_tables = self._load_glue_tables(
@@ -437,7 +400,10 @@ class DataMeshProducer:
         :param decision_notes:
         :return:
         '''
-        pass
+        return self._subscription_tracker.update_status(
+            subscription_id=request_id, status=STATUS_ACTIVE,
+            permitted_grants=grant_permissions, notes=decision_notes
+        )
 
     def deny_access_request(self, request_id: str,
                             decision_notes: str = None):
@@ -447,10 +413,32 @@ class DataMeshProducer:
         :param decision_notes:
         :return:
         '''
-        pass
+        return self._subscription_tracker.update_status(
+            subscription_id=request_id, status=STATUS_DENIED,
+            notes=decision_notes
+        )
 
-    def update_subscription(self, subscription_id: str, grant_permissions: list, notes: str):
-        pass
+    def update_subscription_permissions(self, subscription_id: str, grant_permissions: list, notes: str):
+        '''
+        Update the permissions on a subscription
+        :param subscription_id:
+        :param grant_permissions:
+        :param notes:
+        :return:
+        '''
+        return self._subscription_tracker.update_grants(
+            subscription_id=subscription_id, permitted_grants=grant_permissions,
+            notes=notes
+        )
 
     def delete_subscription(self, subscription_id: str, reason: str):
-        pass
+        '''
+        Soft delete a subscription
+        :param subscription_id:
+        :param reason:
+        :return:
+        '''
+        return self._subscription_tracker.update_status(
+            subscription_id=subscription_id, status=STATUS_DELETED,
+            notes=reason
+        )

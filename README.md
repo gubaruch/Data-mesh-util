@@ -58,9 +58,17 @@ All information around current or pending subscriptions is stored in DynamoDB, i
 
 This functionality is presented to customers as a Python library to allow maximum re-use. It is divided into 3 modules, each specific to a persona within the overall Data Mesh architecture:
 
-* [`DataMeshAdmin.py`](doc/DataMeshAdmin.md) - Includes functionality to be performed by the Administrative function, and is generally only used once to setup the Mesh architecture
-* [`DataMeshProducer.py`](doc/DataMeshProducer.md) - Includes functionality performed by the __Producer__ persona, to create an manage __Data Products__
-* [`DataMeshConsumer.py`](doc/DataMeshConsumer.md) - Includes functionality allowing principals to subscribe to __Data Products__
+* `src`
+	* `data_mesh_util`
+		* [`DataMeshAdmin.py`](doc/DataMeshAdmin.md) - Includes functionality to be performed by the Administrative function, and is generally only used once to setup the Mesh architecture
+		* [`DataMeshProducer.py`](doc/DataMeshProducer.md) - Includes functionality performed by the __Producer__ persona, to create an manage __Data Products__
+		* [`DataMeshConsumer.py`](doc/DataMeshConsumer.md) - Includes functionality allowing principals to subscribe to __Data Products__
+	* `lib`
+		* `constants.py` - Contains contant values used in user or class interaction
+		* `SubscriberTracker.py` - Class that manages data product __Subscription__ status
+		* `utils.py` - Various utility functions shared across the codebase
+	* `resource` - Pystache templates used to generate various configurations
+* `test` - Integration tests of functionality
 
 ---
 Amazon Web Services, 2021

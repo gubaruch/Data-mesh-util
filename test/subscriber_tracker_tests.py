@@ -2,7 +2,7 @@ import warnings
 import unittest
 import os
 import boto3
-from data_mesh_util.lib.SubscriberTracker import SubscriberTracker
+from data_mesh_util.lib.SubscriberTracker import *
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
