@@ -33,11 +33,17 @@ class DataMeshProducer:
     _subscription_tracker = None
     _current_account = None
 
-    def __init__(self, data_mesh_account_id: str, log_level: str = "INFO"):
+    def __init__(self, data_mesh_account_id: str, log_level: str = "INFO", use_credentials=None):
         self._data_mesh_account_id = data_mesh_account_id
-        self._iam_client = boto3.client('iam')
-        self._sts_client = boto3.client('sts')
+
         self._current_region = os.getenv('AWS_REGION')
+
+        if use_credentials is not None:
+            self._iam_client = utils.generate_client('iam', region=self._current_region, credentials=use_credentials)
+            self._sts_client = utils.generate_client('sts', region=self._current_region, credentials=use_credentials)
+        else:
+            self._iam_client = boto3.client('iam')
+            self._sts_client = boto3.client('sts')
 
         if self._current_region is None:
             raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
@@ -309,7 +315,7 @@ class DataMeshProducer:
         self._logger.info("Loaded %s tables matching description from Glue" % len(all_tables))
         return all_tables
 
-    def create_data_products(self, data_mesh_account_id: str, source_database_name: str,
+    def create_data_products(self, source_database_name: str,
                              table_name_regex: str = None, sync_mesh_catalog_schedule: str = None,
                              sync_mesh_crawler_role_arn: str = None):
         # generate the target database name for the mesh
@@ -368,7 +374,7 @@ class DataMeshProducer:
                 producer_glue_client=producer_glue_client,
                 data_mesh_database_name=data_mesh_database_name,
                 producer_account_id=current_account.get('Account'),
-                data_mesh_account_id=data_mesh_account_id
+                data_mesh_account_id=self._data_mesh_account_id
             )
 
             if sync_mesh_catalog_schedule is not None:

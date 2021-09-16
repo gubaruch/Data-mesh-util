@@ -30,10 +30,16 @@ class DataMeshConsumer:
     _logger.addHandler(logging.StreamHandler(sys.stdout))
     _subscription_tracker = None
 
-    def __init__(self, data_mesh_account_id: str, log_level: str = "INFO"):
-        self._iam_client = boto3.client('iam')
-        self._sts_client = boto3.client('sts')
+    def __init__(self, data_mesh_account_id: str, log_level: str = "INFO", use_credentials=None):
         self._current_region = os.getenv('AWS_REGION')
+
+        if use_credentials is not None:
+            self._iam_client = utils.generate_client('iam', region=self._current_region, credentials=use_credentials)
+            self._sts_client = utils.generate_client('sts', region=self._current_region, credentials=use_credentials)
+        else:
+            self._iam_client = boto3.client('iam')
+            self._sts_client = boto3.client('sts')
+
         self._log_level = log_level
         self._logger.setLevel(log_level)
 

@@ -46,7 +46,6 @@ class DataMeshProducerAccountTests(unittest.TestCase):
 
     def test_create_data_product(self):
         self._mgr.create_data_products(
-            data_mesh_account_id=MESH_ACCOUNT,
             source_database_name='tpcds',
             table_name_regex='customer',
             sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",
