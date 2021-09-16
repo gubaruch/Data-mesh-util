@@ -44,10 +44,25 @@ class DataMeshIntegrationTests(unittest.TestCase):
                                      use_credentials=_creds.get('Consumer'))
 
     def integration_test(self):
+        db = 'tpcds'
+        t = 'customer'
         # create a data product
         self._producer.create_data_products(
-            source_database_name='tpcds',
-            table_name_regex='customer',
-            sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",
-            sync_mesh_crawler_role_arn="arn:aws:iam::600214582022:role/service-role/AWSGlueServiceRole-Crawler"
+            source_database_name=db,
+            table_name_regex=t
         )
+
+        data_product = self._producer.get_data_product(database_name=db, table_name_regex=t)
+        self.assertIsNotNone(data_product)
+        self.assertEqual(len(data_product), 1)
+
+        # request access from the consumer
+        self._consumer.request_access_to_product(owner_account_id=self._account_ids.get('Producer'), database_name=db,
+                                                 tables=[t], request_permissions=['SELECT'],
+                                                 requesting_principal=self._account_ids.get('Consumer'))
+
+        # approve access from the producer
+
+        # tear down the subscription
+
+        # delete the data product

@@ -196,7 +196,10 @@ class DataMeshProducer:
         t = table_def.copy()
 
         def rm(prop):
-            del t[prop]
+            try:
+                del t[prop]
+            except KeyError:
+                pass
 
         # remove properties from a TableInfo object returned from get_table to be compatible with put_table
         rm('DatabaseName')
@@ -315,11 +318,14 @@ class DataMeshProducer:
         self._logger.info("Loaded %s tables matching description from Glue" % len(all_tables))
         return all_tables
 
+    def _make_database_name(self, database_name: str):
+        return "%s-%s" % (database_name, self._current_account.get('Account'))
+
     def create_data_products(self, source_database_name: str,
                              table_name_regex: str = None, sync_mesh_catalog_schedule: str = None,
                              sync_mesh_crawler_role_arn: str = None):
         # generate the target database name for the mesh
-        data_mesh_database_name = "%s-%s" % (source_database_name, self._current_account.get('Account'))
+        data_mesh_database_name = self._make_database_name(source_database_name)
 
         # create clients for the current account and with the new credentials in the data mesh account
         producer_glue_client = boto3.client('glue', region_name=self._current_region)
@@ -387,6 +393,24 @@ class DataMeshProducer:
                     sync_schedule=sync_mesh_catalog_schedule
                 )
                 self._logger.info("Created new Glue Crawler %s" % glue_crawler)
+
+    def get_data_product(self, database_name: str, table_name_regex: str):
+        # generate a new glue client for the data mesh account
+        data_mesh_glue_client = utils.generate_client('glue', region=self._current_region,
+                                                      credentials=self._data_mesh_sts_session.get('Credentials'))
+        # grab the tables that match the regex
+        all_tables = self._load_glue_tables(
+            glue_client=data_mesh_glue_client,
+            catalog_id=self._data_mesh_account_id,
+            source_db_name=self._make_database_name(database_name),
+            table_name_regex=table_name_regex
+        )
+        response = []
+        for t in all_tables:
+            response.append({"Database": t.get('DatabaseName'), "TableName": t.get('Name'),
+                             "Location": t.get('StorageDescriptor').get("Location")})
+
+        return response
 
     def list_pending_access_requests(self):
         '''

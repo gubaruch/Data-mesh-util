@@ -85,7 +85,8 @@ class DataMeshConsumer:
             database_name=database_name,
             tables=tables,
             principal=requesting_principal,
-            request_grants=request_permissions
+            request_grants=request_permissions,
+            suppress_object_validation=True
         )
 
     def list_product_access(self, principal_id: str):
