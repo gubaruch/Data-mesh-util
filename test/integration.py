@@ -22,7 +22,8 @@ class DataMeshIntegrationTests(unittest.TestCase):
 
     # load credentials
     _creds = None
-    with open('integration-test-creds.json', 'r') as w:
+    cred_file = os.getenv('CredentialsFile')
+    with open(cred_file, 'r') as w:
         _creds = json.load(w)
         w.close()
 
