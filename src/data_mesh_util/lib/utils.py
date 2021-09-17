@@ -312,7 +312,11 @@ def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, 
 
         logger.debug(args)
 
-        return lf_client.grant_permissions(**args)
+        response = lf_client.grant_permissions(**args)
+
+        logger.info(f"Granted LakeFormation Permissions {permissions} to {principal}")
+
+        return response
     except lf_client.exceptions.from_code('AlreadyExistsException') as aee:
         return None
     except lf_client.exceptions.InvalidInputException as iie:

@@ -15,8 +15,6 @@ from data_mesh_util import DataMeshProducer as dmp
 from data_mesh_util import DataMeshConsumer as dmc
 from data_mesh_util.lib.SubscriberTracker import *
 
-warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
-
 
 class DataMeshIntegrationTests(unittest.TestCase):
     _log_level = "DEBUG"
@@ -26,6 +24,7 @@ class DataMeshIntegrationTests(unittest.TestCase):
     _creds = None
     with open('integration-test-creds.json', 'r') as w:
         _creds = json.load(w)
+        w.close()
 
     _clients = {}
     _account_ids = {}
@@ -43,6 +42,9 @@ class DataMeshIntegrationTests(unittest.TestCase):
     _consumer = dmc.DataMeshConsumer(data_mesh_account_id=_account_ids.get('Mesh'),
                                      use_credentials=_creds.get('Consumer'))
 
+    def setUp(self) -> None:
+        warnings.filterwarnings("ignore", category=ResourceWarning)
+
     def integration_test(self):
         db = 'tpcds'
         t = 'customer'
@@ -57,11 +59,25 @@ class DataMeshIntegrationTests(unittest.TestCase):
         self.assertEqual(len(data_product), 1)
 
         # request access from the consumer
-        self._consumer.request_access_to_product(owner_account_id=self._account_ids.get('Producer'), database_name=db,
-                                                 tables=[t], request_permissions=['SELECT'],
-                                                 requesting_principal=self._account_ids.get('Consumer'))
+        requested_subscription = self._consumer.request_access_to_product(
+            owner_account_id=self._account_ids.get('Producer'),
+            database_name=db,
+            tables=[t], request_permissions=['SELECT'],
+            requesting_principal=self._account_ids.get(
+                'Consumer'))
+        subscription = self._consumer.get_subscription(request_id=requested_subscription.get("SubscriptionId"))
+        self.assertIsNotNone(subscription)
+        self.assertEqual(subscription.get('Status'), STATUS_PENDING)
 
         # approve access from the producer
+        approval = self._producer.approve_access_request(
+            request_id=requested_subscription.get("SubscriptionId"),
+            grant_permissions=requested_subscription.get("RequestedGrants"),
+            grantable_permissions=None, decision_notes='Approved'
+        )
+        subscription = self._consumer.get_subscription(request_id=requested_subscription.get("SubscriptionId"))
+        self.assertIsNotNone(subscription)
+        self.assertEqual(subscription.get('Status'), STATUS_ACTIVE)
 
         # tear down the subscription
 
