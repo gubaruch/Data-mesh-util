@@ -4,6 +4,8 @@ import boto3
 import os
 import sys
 import json
+
+import botocore.session
 import shortuuid
 import logging
 
@@ -32,6 +34,8 @@ class DataMeshConsumer:
 
     def __init__(self, data_mesh_account_id: str, log_level: str = "INFO", use_credentials=None):
         self._current_region = os.getenv('AWS_REGION')
+        if self._current_region is None:
+            raise Exception("Cannot create a Data Mesh Consumer without AWS_REGION environment variable")
 
         if use_credentials is not None:
             self._iam_client = utils.generate_client('iam', region=self._current_region, credentials=use_credentials)
@@ -39,6 +43,8 @@ class DataMeshConsumer:
         else:
             self._iam_client = boto3.client('iam')
             self._sts_client = boto3.client('sts')
+
+        utils.validate_correct_account(botocore.session.get_session().get_credentials(), data_mesh_account_id)
 
         self._log_level = log_level
         self._logger.setLevel(log_level)

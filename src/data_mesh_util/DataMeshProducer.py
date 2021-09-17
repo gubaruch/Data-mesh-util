@@ -4,6 +4,8 @@ import boto3
 import os
 import sys
 import json
+
+import botocore.session
 import shortuuid
 import logging
 
@@ -37,6 +39,8 @@ class DataMeshProducer:
         self._data_mesh_account_id = data_mesh_account_id
 
         self._current_region = os.getenv('AWS_REGION')
+        if self._current_region is None:
+            raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
 
         if use_credentials is not None:
             self._iam_client = utils.generate_client('iam', region=self._current_region, credentials=use_credentials)
@@ -45,8 +49,8 @@ class DataMeshProducer:
             self._iam_client = boto3.client('iam')
             self._sts_client = boto3.client('sts')
 
-        if self._current_region is None:
-            raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
+        # validate that we are running in the data mesh account
+        utils.validate_correct_account(botocore.session.get_session().get_credentials(), self._data_mesh_account_id)
 
         self._logger.setLevel(log_level)
 

@@ -3,6 +3,8 @@ import os
 import sys
 import logging
 
+import botocore.session
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "resource"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 from data_mesh_util.lib.constants import *
@@ -29,7 +31,8 @@ class DataMeshAdmin:
     _logger.addHandler(stream_handler)
     _subscriber_tracker = None
 
-    def __init__(self, data_mesh_account_id:str, region_name: str = 'us-east-1', log_level: str = "INFO", use_creds = None):
+    def __init__(self, data_mesh_account_id: str, region_name: str = 'us-east-1', log_level: str = "INFO",
+                 use_creds=None):
         self._data_mesh_account_id = data_mesh_account_id
         # get the region for the module
         if 'AWS_REGION' in os.environ:
@@ -77,6 +80,9 @@ class DataMeshAdmin:
         Private method to create objects needed for an administrative role that can be used to grant access to Data Mesh roles
         :return:
         '''
+        utils.validate_correct_account(credentials=botocore.session.get_session().get_credentials(),
+                                       account_id=self._data_mesh_account_id)
+
         self._create_template_config(self._config)
 
         current_identity = self._sts_client.get_caller_identity()
@@ -212,6 +218,9 @@ class DataMeshAdmin:
         Requires at least 1 S3 Bucket Policy be enabled for future grants.
         :return:
         '''
+        utils.validate_correct_account(botocore.session.get_session().get_credentials(), self._data_mesh_account_id,
+                                       should_match=False)
+
         self._data_producer_account_id = self._sts_client.get_caller_identity().get('Account')
         self._logger.info("Setting up Account %s as a Data Producer" % self._data_producer_account_id)
 
@@ -250,8 +259,7 @@ class DataMeshAdmin:
         Enables a remote account to act as a data producer by granting them access to the DataMeshAdminProducer Role
         :return:
         '''
-        if utils.validate_correct_account(self._iam_client, DATA_MESH_ADMIN_PRODUCER_ROLENAME) is False:
-            raise Exception("Must be run in the Data Mesh Account")
+        utils.validate_correct_account(botocore.session.get_session().get_credentials(), self._data_mesh_account_id, should_match=False)
 
         # create trust relationships for the AdminProducer roles
         utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
@@ -265,6 +273,9 @@ class DataMeshAdmin:
         DataMeshAdminConsumer Role and subscribe to products.
         :return:
         '''
+        utils.validate_correct_account(botocore.session.get_session().get_credentials(), self._data_mesh_account_id,
+                                       should_match=False)
+
         self._data_consumer_account_id = self._sts_client.get_caller_identity().get('Account')
         self._logger.info("Setting up Account %s as a Data Consumer" % self._data_consumer_account_id)
 
@@ -301,8 +312,8 @@ class DataMeshAdmin:
         Enables a remote account to act as a data consumer by granting them access to the DataMeshAdminConsumer Role
         :return:
         '''
-        if utils.validate_correct_account(self._iam_client, DATA_MESH_ADMIN_PRODUCER_ROLENAME) is False:
-            raise Exception("Must be run in the Data Mesh Account")
+        utils.validate_correct_account(botocore.session.get_session().get_credentials(), self._data_mesh_account_id,
+                                       should_match=False)
 
         # create trust relationships for the AdminProducer roles
         utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,

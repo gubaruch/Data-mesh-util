@@ -8,6 +8,7 @@ import json
 import os
 import pystache
 import time
+import botocore
 import boto3
 import datetime
 
@@ -17,12 +18,12 @@ def make_iam_session_name(current_account):
         'Account'), datetime.datetime.now().strftime("%Y-%m-%d"))
 
 
-def validate_correct_account(credentials, account_id: str):
+def validate_correct_account(credentials, account_id: str, should_match: bool = True):
     caller_account = generate_client(service='sts', region=None, credentials=credentials).get_caller_identity().get(
         'Account')
-    if caller_account != account_id:
+    if should_match is False and caller_account == account_id or should_match is True and caller_account != account_id:
         raise Exception(
-            "Subscription Tracker must run within the Data Mesh Account (%s) and not %s" % (account_id, caller_account))
+            f"Function should {'not' if should_match is False else ''} run within the Data Mesh Account ({account_id}) and not {caller_account}")
 
 
 def generate_policy(template_file: str, config: dict):
@@ -39,9 +40,6 @@ def add_aws_trust_to_role(iam_client, account_id: str, role_name: str):
     Private method to add a trust relationship to an AWS Account to a Role
     :return:
     '''
-    # validate that the account is suitable for configuration due to it having the DataMeshManager role installed
-    validate_correct_account(iam_client, role_name)
-
     # update the  trust policy to include the provided account ID
     response = iam_client.get_role(RoleName=role_name)
 
@@ -254,6 +252,27 @@ def _validate_credentials(credentials) -> dict:
             out['SessionToken'] = credentials.token
 
         return out
+
+
+def load_client_info_from_file(from_path: str, region_name:str):
+    if from_path is None:
+        raise Exception("Unable to load Client Connection information from None file")
+    _creds = None
+
+    with open(from_path, 'r') as w:
+        _creds = json.load(w)
+        w.close()
+
+    _clients = {}
+    _account_ids = {}
+    _credentials_dict = {}
+
+    for token in [MESH, PRODUCER, CONSUMER]:
+        _clients[token] = generate_client('sts', region=region_name, credentials=_creds.get(token))
+        _account_ids[token] = _creds.get(token).get('AccountId')
+        _credentials_dict = _creds
+
+    return _clients, _account_ids, _credentials_dict
 
 
 def generate_client(service: str, region: str, credentials):

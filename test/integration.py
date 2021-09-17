@@ -21,27 +21,18 @@ class DataMeshIntegrationTests(unittest.TestCase):
     _current_region = os.getenv('AWS_REGION')
 
     # load credentials
-    _creds = None
-    cred_file = os.getenv('CredentialsFile')
-    with open(cred_file, 'r') as w:
-        _creds = json.load(w)
-        w.close()
-
-    _clients = {}
-    _account_ids = {}
-    for token in ['Mesh', 'Producer', 'Consumer']:
-        _clients[token] = utils.generate_client('sts', region=_current_region, credentials=_creds.get(token))
-        _account_ids[token] = _creds.get(token).get('AccountId')
+    _client, _account_ids, _creds = utils.load_client_info_from_file(from_path=os.getenv('CredentialsFile'),
+                                                                     region_name=os.getenv('AWS_REGION'))
 
     _subscription_tracker = SubscriberTracker(credentials=boto3.session.Session().get_credentials(),
                                               data_mesh_account_id=_account_ids.get('Mesh'),
                                               region_name=_current_region,
                                               log_level=_log_level)
 
-    _producer = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get('Mesh'),
-                                     use_credentials=_creds.get('Producer'))
-    _consumer = dmc.DataMeshConsumer(data_mesh_account_id=_account_ids.get('Mesh'),
-                                     use_credentials=_creds.get('Consumer'))
+    _producer = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get(MESH),
+                                     use_credentials=_creds.get(PRODUCER))
+    _consumer = dmc.DataMeshConsumer(data_mesh_account_id=_account_ids.get(MESH),
+                                     use_credentials=_creds.get(CONSUMER))
 
     def setUp(self) -> None:
         warnings.filterwarnings("ignore", category=ResourceWarning)
