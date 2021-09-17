@@ -29,14 +29,8 @@ class DataMeshAdmin:
     _logger.addHandler(stream_handler)
     _subscriber_tracker = None
 
-    def __init__(self, data_mesh_account_id:str, region_name: str = 'us-east-1', log_level: str = "INFO"):
+    def __init__(self, data_mesh_account_id:str, region_name: str = 'us-east-1', log_level: str = "INFO", use_creds = None):
         self._data_mesh_account_id = data_mesh_account_id
-        self._iam_client = boto3.client('iam')
-        self._sts_client = boto3.client('sts')
-        self._dynamo_client = boto3.client('dynamodb')
-        self._dynamo_resource = boto3.resource('dynamodb')
-        self._lf_client = boto3.client('lakeformation')
-
         # get the region for the module
         if 'AWS_REGION' in os.environ:
             self._region = os.environ.get('AWS_REGION')
@@ -45,6 +39,19 @@ class DataMeshAdmin:
                 raise Exception("Cannot initialize a Data Mesh without an AWS Region")
             else:
                 self._region = region_name
+
+        if use_creds is None:
+            self._iam_client = boto3.client('iam')
+            self._sts_client = boto3.client('sts')
+            self._dynamo_client = boto3.client('dynamodb')
+            self._dynamo_resource = boto3.resource('dynamodb')
+            self._lf_client = boto3.client('lakeformation')
+        else:
+            self._iam_client = utils.generate_client('iam', region=region_name, credentials=use_creds)
+            self._sts_client = utils.generate_client('sts', region=region_name, credentials=use_creds)
+            self._dynamo_client = utils.generate_client('dynamodb', region=region_name, credentials=use_creds)
+            self._dynamo_resource = utils.generate_client('dynamodb', region=region_name, credentials=use_creds)
+            self._lf_client = utils.generate_client('lakeformation', region=region_name, credentials=use_creds)
 
         self._logger.setLevel(log_level)
         self._log_level = log_level
