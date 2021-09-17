@@ -21,11 +21,15 @@ class DataMeshAdminAccountTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._mgr = dmu.DataMeshAdmin(log_level=logging.DEBUG)
+        cls._mgr = dmu.DataMeshAdmin(data_mesh_account_id=MESH_ACCOUNT, region_name='eu-west-1',
+                                     log_level=logging.DEBUG)
 
     def test_setup_data_mesh_account(self):
         output = self._mgr.initialize_mesh_account()
         self._logger.info(output)
 
     def test_grant_producer_access(self):
-        self._mgr.enable_account_as_producer(account_id='600214582022')
+        self._mgr.initialize_producer_account()
+
+    def test_setup_consumer(self):
+        self._mgr.initialize_consumer_account()

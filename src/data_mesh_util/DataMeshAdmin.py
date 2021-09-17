@@ -15,6 +15,7 @@ class DataMeshAdmin:
     _data_mesh_account_id = None
     _data_producer_account_id = None
     _data_consumer_account_id = None
+    _data_consumer_role_arn = None
     _data_mesh_manager_role_arn = None
     _iam_client = None
     _lf_client = None
@@ -23,11 +24,13 @@ class DataMeshAdmin:
     _dynamo_resource = None
     _config = {}
     _logger = logging.getLogger("DataMeshAdmin")
+    _log_level = None
     stream_handler = logging.StreamHandler(sys.stdout)
     _logger.addHandler(stream_handler)
     _subscriber_tracker = None
 
-    def __init__(self, region_name: str = 'us-east-1', log_level: str = "INFO"):
+    def __init__(self, data_mesh_account_id:str, region_name: str = 'us-east-1', log_level: str = "INFO"):
+        self._data_mesh_account_id = data_mesh_account_id
         self._iam_client = boto3.client('iam')
         self._sts_client = boto3.client('sts')
         self._dynamo_client = boto3.client('dynamodb')
@@ -44,11 +47,7 @@ class DataMeshAdmin:
                 self._region = region_name
 
         self._logger.setLevel(log_level)
-
-        current_credentials = boto3.session.Session().get_credentials()
-        self._subscription_tracker = SubscriberTracker(credentials=current_credentials,
-                                                       region_name=self._region,
-                                                       log_level=log_level)
+        self._log_level = log_level
 
     def _create_template_config(self, config: dict):
         if config is None:
@@ -176,6 +175,12 @@ class DataMeshAdmin:
         '''
         self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
 
+        current_credentials = boto3.session.Session().get_credentials()
+        self._subscription_tracker = SubscriberTracker(data_mesh_account_id=self._data_mesh_account_id,
+                                                       credentials=self._current_credentials,
+                                                       region_name=self._region,
+                                                       log_level=self._log_level)
+
         # create a new IAM role in the Data Mesh Account to be used for future grants
         mgr_tuple = self._create_data_mesh_manager_role()
 
@@ -246,7 +251,6 @@ class DataMeshAdmin:
                                     role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
         self._logger.info("Enabled Account %s to assume %s" % (account_id, DATA_MESH_ADMIN_PRODUCER_ROLENAME))
 
-    # TODO remove this method in favour of CloudFormation based init
     def initialize_consumer_account(self):
         '''
         Sets up an AWS Account to act as a Data Consumer from the central Data Mesh Account. This method should be invoked
@@ -254,7 +258,6 @@ class DataMeshAdmin:
         DataMeshAdminConsumer Role and subscribe to products.
         :return:
         '''
-        self._check_acct()
         self._data_consumer_account_id = self._sts_client.get_caller_identity().get('Account')
         self._logger.info("Setting up Account %s as a Data Consumer" % self._data_consumer_account_id)
 
@@ -267,6 +270,8 @@ class DataMeshAdmin:
             role_name=DATA_MESH_CONSUMER_ROLENAME,
             role_desc='Role to be used to update S3 Bucket Policies for access by the Data Mesh Account',
             account_id=self._data_consumer_account_id)
+
+        self._data_consumer_role_arn = consumer_iam[0]
 
         policy_name = "AssumeDataMeshAdminConsumer"
         policy_arn = utils.create_assume_role_policy(

@@ -18,3 +18,4 @@ __pycache__/
 /doc/_apidoc/
 /build
 .idea
+test/integration-test-creds.json
