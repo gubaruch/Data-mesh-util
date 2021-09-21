@@ -24,6 +24,7 @@ DATABASE_NAME = 'DatabaseName'
 TABLE_NAME = 'TableName'
 REQUESTED_GRANTS = 'RequestedGrants'
 PERMITTED_GRANTS = 'PermittedGrants'
+RAM_SHARES = 'RamShares'
 NOTES = 'Notes'
 
 
@@ -472,7 +473,8 @@ class SubscriberTracker:
 
         return self._handle_update(args)
 
-    def update_status(self, subscription_id: str, status: str, permitted_grants: list = None, notes: str = None):
+    def update_status(self, subscription_id: str, status: str, permitted_grants: list = None, notes: str = None,
+                      ram_shares: dict = None):
         '''
         Updates the status of a subscription. Valid transitions are:
         PENDING->ACTIVE
@@ -521,6 +523,11 @@ class SubscriberTracker:
             # permitted grants will be set to whatever was previously requested
             current_sub = self.get_subscription(subscription_id=subscription_id)
             args["ExpressionAttributeValues"][":permitted"] = current_sub.get(REQUESTED_GRANTS)
+
+        if ram_shares is not None:
+            args["UpdateExpression"] = "%s %s" % (args["UpdateExpression"], ",#ram = :ram")
+            args["ExpressionAttributeNames"]["#ram"] = RAM_SHARES
+            args["ExpressionAttributeValues"][":ram"] = ram_shares
 
         # add the notes field as a set if we got any
         if notes is not None:

@@ -334,11 +334,12 @@ def generate_resource(service: str, region: str, credentials):
     return boto3.resource(**args)
 
 
-def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, table_name: str = None,
+def lf_grant_permissions(logger, data_mesh_account_id, lf_client, principal: str, database_name: str, table_name: str = None,
                          permissions: list = ['ALL'],
                          grantable_permissions: list = ['ALL']):
     try:
         table_spec = {
+            'CatalogId': data_mesh_account_id,
             'DatabaseName': database_name
         }
         if table_name is None or table_name == "*":
@@ -351,6 +352,7 @@ def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, 
             permissions.append('DESCRIBE')
 
         args = {
+            "CatalogId": data_mesh_account_id,
             "Principal": {
                 'DataLakePrincipalIdentifier': principal
             },

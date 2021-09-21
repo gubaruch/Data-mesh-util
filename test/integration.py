@@ -58,7 +58,7 @@ class DataMeshIntegrationTests(unittest.TestCase):
         # request access from the consumer
         requested_subscription = self._consumer.request_access_to_product(
             owner_account_id=self._account_ids.get('Producer'),
-            database_name=f"{db}-{self._account_ids.get(MESH)}",
+            database_name=f"{db}-{self._account_ids.get(PRODUCER)}",
             tables=[t], request_permissions=['SELECT']
         )
 

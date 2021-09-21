@@ -257,6 +257,7 @@ class DataMeshProducer:
         # grant access to the producer account
         perms = ['ALL']
         created_object = utils.lf_grant_permissions(
+            data_mesh_account_id=self._data_mesh_account_id,
             lf_client=data_mesh_lf_client, principal=producer_account_id,
             database_name=data_mesh_database_name, table_name=table_name,
             permissions=perms,
@@ -265,6 +266,7 @@ class DataMeshProducer:
 
         # grant the DataMeshAdminConsumerRole rights to describe the table, meaning any consumer can see metadata
         utils.lf_grant_permissions(
+            data_mesh_account_id=self._data_mesh_account_id,
             lf_client=data_mesh_lf_client, principal=utils.get_datamesh_consumer_role_arn(
                 account_id=self._data_mesh_account_id),
             database_name=data_mesh_database_name, table_name=table_name,
@@ -370,9 +372,12 @@ class DataMeshProducer:
         self._logger.info("Validated Data Mesh Database %s" % data_mesh_database_name)
 
         # grant the producer permissions to create tables on this database
-        utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal=current_account.get('Account'),
-                                   database_name=data_mesh_database_name, permissions=['CREATE_TABLE', 'DESCRIBE'],
-                                   grantable_permissions=None, logger=self._logger)
+        utils.lf_grant_permissions(
+            data_mesh_account_id=self._data_mesh_account_id, lf_client=data_mesh_lf_client,
+            principal=current_account.get('Account'),
+            database_name=data_mesh_database_name, permissions=['CREATE_TABLE', 'DESCRIBE'],
+            grantable_permissions=None, logger=self._logger
+        )
         self._logger.info("Granted access on Database %s to Producer" % data_mesh_database_name)
 
         # get or create a data mesh shared database in the producer account
@@ -461,18 +466,45 @@ class DataMeshProducer:
         data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
                                                     credentials=self._data_mesh_sts_session.get('Credentials'))
         tables = subscription.get(TABLE_NAME)
+        ram_shares = {}
         for t in tables:
-            utils.lf_grant_permissions(lf_client=data_mesh_lf_client,
-                                       principal=subscription.get(SUBSCRIBER_PRINCIPAL),
-                                       database_name=subscription.get(DATABASE_NAME),
-                                       table_name=t,
-                                       permissions=set_permissions,
-                                       grantable_permissions=grantable_permissions, logger=self._logger)
+            # grant validated permissions to object
+            utils.lf_grant_permissions(
+                data_mesh_account_id=self._data_mesh_account_id,
+                lf_client=data_mesh_lf_client,
+                principal=subscription.get(SUBSCRIBER_PRINCIPAL),
+                database_name=subscription.get(DATABASE_NAME),
+                table_name=t,
+                permissions=set_permissions,
+                grantable_permissions=grantable_permissions, logger=self._logger
+            )
+
+            # get the permission for the object
+            perm = data_mesh_lf_client.list_permissions(
+                CatalogId=self._data_mesh_account_id,
+                ResourceType='TABLE',
+                Resource={
+                    'Table': {
+                        'CatalogId': self._data_mesh_account_id,
+                        'DatabaseName': subscription.get(DATABASE_NAME),
+                        'Name': t
+                    }
+                }
+            )
+
+            if perm is not None:
+                for p in perm.get('PrincipalResourcePermissions'):
+                    if p.get('Principal').get('DataLakePrincipalIdentifier') == subscription.get(
+                            SUBSCRIBER_PRINCIPAL) and 'DESCRIBE' in p.get(
+                            'Permissions'):
+                        ram_shares[t] = p.get('AdditionalDetails').get('ResourceShare')[0]
+            else:
+                raise Exception("Unable to Load RAM Share for Permission")
 
         # update the subscription to reflect the changes
         return self._subscription_tracker.update_status(
             subscription_id=request_id, status=STATUS_ACTIVE,
-            permitted_grants=grant_permissions, notes=decision_notes
+            permitted_grants=grant_permissions, notes=decision_notes, ram_shares=ram_shares
         )
 
     def deny_access_request(self, request_id: str,

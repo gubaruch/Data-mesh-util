@@ -90,7 +90,7 @@ class DataMeshConsumer:
             owner_account_id=owner_account_id,
             database_name=database_name,
             tables=tables,
-            principal=utils.get_datamesh_consumer_role_arn(account_id=self._current_account.get('Account')),
+            principal=self._current_account.get('Account'),
             request_grants=request_permissions,
             suppress_object_validation=True
         )
