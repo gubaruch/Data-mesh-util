@@ -14,6 +14,7 @@ from data_mesh_util.lib.SubscriberTracker import SubscriberTracker
 
 class DataMeshAdmin:
     _region = None
+    _current_credentials = None
     _data_mesh_account_id = None
     _data_producer_account_id = None
     _data_producer_role_arn = None
@@ -190,7 +191,7 @@ class DataMeshAdmin:
         '''
         self._data_mesh_account_id = self._sts_client.get_caller_identity().get('Account')
 
-        current_credentials = boto3.session.Session().get_credentials()
+        self._current_credentials = boto3.session.Session().get_credentials()
         self._subscription_tracker = SubscriberTracker(data_mesh_account_id=self._data_mesh_account_id,
                                                        credentials=self._current_credentials,
                                                        region_name=self._region,
