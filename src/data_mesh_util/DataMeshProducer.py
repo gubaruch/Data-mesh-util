@@ -22,6 +22,7 @@ class DataMeshProducer:
     _data_producer_account_id = None
     _data_consumer_account_id = None
     _data_mesh_manager_role_arn = None
+    _session = None
     _iam_client = None
     _sts_client = None
     _config = {}
@@ -43,14 +44,13 @@ class DataMeshProducer:
             raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
 
         if use_credentials is not None:
-            self._iam_client = utils.generate_client('iam', region=self._current_region, credentials=use_credentials)
-            self._sts_client = utils.generate_client('sts', region=self._current_region, credentials=use_credentials)
+            self._session = utils.create_session(credentials=use_credentials, region=self._current_region)
+            self._iam_client = self._session.client('iam')
+            self._sts_client = self._session.client('sts')
         else:
+            self._session = botocore.session.get_session()
             self._iam_client = boto3.client('iam')
             self._sts_client = boto3.client('sts')
-
-        # validate that we are running in the data mesh account
-        utils.validate_correct_account(botocore.session.get_session().get_credentials(), self._data_mesh_account_id)
 
         self._logger.setLevel(log_level)
 
@@ -59,6 +59,12 @@ class DataMeshProducer:
         self._data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=data_mesh_account_id)
         self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_producer_role_arn,
                                                                    RoleSessionName=session_name)
+        self._logger.debug("Created new STS Session for Data Mesh Admin Producer")
+        self._logger.debug(self._data_mesh_sts_session)
+
+        # validate that we are running in the data mesh account
+        utils.validate_correct_account(self._data_mesh_sts_session.get('Credentials'), self._data_mesh_account_id)
+
         self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_sts_session.get('Credentials'),
                                                        data_mesh_account_id=data_mesh_account_id,
                                                        region_name=self._current_region,
@@ -249,17 +255,22 @@ class DataMeshProducer:
             self._logger.info("Glue Table Already Exists")
 
         # grant access to the producer account
-        perms = ['SELECT', 'ALTER', 'INSERT', 'DESCRIBE']
-        created_object = utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal=producer_account_id,
-                                                    database_name=data_mesh_database_name, table_name=table_name,
-                                                    permissions=perms,
-                                                    grantable_permissions=perms, logger=self._logger)
+        perms = ['ALL']
+        created_object = utils.lf_grant_permissions(
+            lf_client=data_mesh_lf_client, principal=producer_account_id,
+            database_name=data_mesh_database_name, table_name=table_name,
+            permissions=perms,
+            grantable_permissions=perms, logger=self._logger
+        )
 
-        # grant any IAM principal the right to describe the table
-        utils.lf_grant_permissions(lf_client=data_mesh_lf_client, principal='IAM_ALLOWED_PRINCIPALS',
-                                   database_name=data_mesh_database_name, table_name=table_name,
-                                   permissions=['DESCRIBE'],
-                                   grantable_permissions=None, logger=self._logger)
+        # grant the DataMeshAdminConsumerRole rights to describe the table, meaning any consumer can see metadata
+        utils.lf_grant_permissions(
+            lf_client=data_mesh_lf_client, principal=utils.get_datamesh_consumer_role_arn(
+                account_id=self._data_mesh_account_id),
+            database_name=data_mesh_database_name, table_name=table_name,
+            permissions=['DESCRIBE'],
+            grantable_permissions=None, logger=self._logger
+        )
 
         # in the producer account, accept the RAM share after 1 second - seems to be an async delay
         if created_object is not None:
@@ -332,14 +343,14 @@ class DataMeshProducer:
         data_mesh_database_name = self._make_database_name(source_database_name)
 
         # create clients for the current account and with the new credentials in the data mesh account
-        producer_glue_client = boto3.client('glue', region_name=self._current_region)
-        producer_ram_client = boto3.client('ram', region_name=self._current_region)
+        producer_glue_client = self._session.client('glue', region_name=self._current_region)
+        producer_ram_client = self._session.client('ram', region_name=self._current_region)
         data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
                                                       credentials=self._data_mesh_sts_session.get('Credentials'))
         data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
                                                     credentials=self._data_mesh_sts_session.get('Credentials'))
 
-        current_account = boto3.client('sts').get_caller_identity()
+        current_account = self._session.client('sts').get_caller_identity()
 
         # load the specified tables to be created as data products
         all_tables = self._load_glue_tables(

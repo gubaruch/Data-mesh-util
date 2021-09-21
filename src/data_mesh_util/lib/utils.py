@@ -21,9 +21,12 @@ def make_iam_session_name(current_account):
 def validate_correct_account(credentials, account_id: str, should_match: bool = True):
     caller_account = generate_client(service='sts', region=None, credentials=credentials).get_caller_identity().get(
         'Account')
-    if should_match is False and caller_account == account_id or should_match is True and caller_account != account_id:
+    if should_match is False and caller_account == account_id:
         raise Exception(
-            f"Function should {'not' if should_match is False else ''} run within the Data Mesh Account ({account_id}) and not {caller_account}")
+            f"Function should run within the Data Mesh Account ({account_id}) and not {caller_account}")
+    if should_match is True and caller_account != account_id:
+        raise Exception(
+            f"Function should not run within the Data Mesh Account ({account_id}) ")
 
 
 def generate_policy(template_file: str, config: dict):
@@ -81,7 +84,7 @@ def create_assume_role_doc(aws_principals: list = None, resource: str = None, ad
 
 
 def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_template: str,
-                  role_name: str, role_desc: str, account_id: str, config: dict = None,
+                  role_name: str, role_desc: str, account_id: str, logger, config: dict = None,
                   additional_assuming_principals: dict = None, managed_policies_to_attach: list = None):
     policy_arn = None
     try:
@@ -99,6 +102,8 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
     except iam_client.exceptions.EntityAlreadyExistsException:
         policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
 
+    logger.info(f"Policy {policy_name} validated as {policy_arn}")
+
     # create a non-root user who can assume the role
     try:
         response = iam_client.create_user(
@@ -106,6 +111,7 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
             UserName=role_name,
             Tags=DEFAULT_TAGS
         )
+        logger.info(f"Created new User {role_name}")
 
         # have to sleep for a second here, as there appears to be eventual consistency between create_user and create_role
         time.sleep(.5)
@@ -115,11 +121,13 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
     user_arn = "arn:aws:iam::%s:user%s%s" % (account_id, DATA_MESH_IAM_PATH, role_name)
 
     # create a group for the user
+    group_name = f"{role_name}Group"
     try:
         response = iam_client.create_group(
             Path=DATA_MESH_IAM_PATH,
-            GroupName=("%sGroup" % role_name)
+            GroupName=group_name
         )
+        logger.info(f"Created new Group {group_name}")
     except iam_client.exceptions.EntityAlreadyExistsException:
         pass
 
@@ -128,9 +136,10 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
     # put the user into the group
     try:
         response = iam_client.add_user_to_group(
-            GroupName=("%sGroup" % role_name),
+            GroupName=group_name,
             UserName=role_name
         )
+        logger.info(f"Added User {role_name} to Group {group_name}")
     except iam_client.exceptions.EntityAlreadyExistsException:
         pass
 
@@ -154,11 +163,14 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         role_arn = iam_client.get_role(RoleName=role_name).get(
             'Role').get('Arn')
 
+    logger.info(f"Validated Role {role_name} as {role_arn}")
+
     # attach the created policy to the role
     iam_client.attach_role_policy(
         RoleName=role_name,
         PolicyArn=policy_arn
     )
+    logger.info(f"Attached Policy {policy_arn} to {role_name}")
 
     # attach the indicated managed policies
     if managed_policies_to_attach:
@@ -167,11 +179,14 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
                 RoleName=role_name,
                 PolicyArn="arn:aws:iam::aws:policy/%s" % policy
             )
+            logger.info(f"Attached managed policy {policy}")
 
-    create_assume_role_policy(iam_client, account_id, ("Assume%s" % role_name), role_arn)
+    create_assume_role_policy(iam_client=iam_client, account_id=account_id, policy_name=("Assume%s" % role_name),
+                              role_arn=role_arn, logger=logger)
 
     # now let the group assume the role
-    iam_client.attach_group_policy(GroupName=("%sGroup" % role_name), PolicyArn=policy_arn)
+    iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
+    logger.info(f"Bound {policy_arn} to Group {group_name}")
 
     # TODO Grant permissions for IamAllowedPrincipals to SUPER for this Account
     return role_arn, user_arn, group_arn
@@ -204,7 +219,7 @@ def get_or_create_database(glue_client, database_name: str, database_desc: str):
         )
 
 
-def create_assume_role_policy(iam_client, account_id: str, policy_name: str, role_arn: str):
+def create_assume_role_policy(iam_client, account_id: str, policy_name: str, role_arn: str, logger):
     # create a policy that lets someone assume this new role
     policy_arn = None
     try:
@@ -218,6 +233,8 @@ def create_assume_role_policy(iam_client, account_id: str, policy_name: str, rol
         policy_arn = response.get('Policy').get('Arn')
     except iam_client.exceptions.EntityAlreadyExistsException:
         policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
+
+    logger.info(f"Validated {policy_name} as {policy_arn}")
 
     return policy_arn
 
@@ -254,7 +271,7 @@ def _validate_credentials(credentials) -> dict:
         return out
 
 
-def load_client_info_from_file(from_path: str, region_name:str):
+def load_client_info_from_file(from_path: str, region_name: str):
     if from_path is None:
         raise Exception("Unable to load Client Connection information from None file")
     _creds = None
@@ -275,20 +292,28 @@ def load_client_info_from_file(from_path: str, region_name:str):
     return _clients, _account_ids, _credentials_dict
 
 
+def create_session(credentials=None, region=None):
+    if credentials is not None:
+        use_creds = _validate_credentials(credentials)
+        args = {
+            "aws_access_key_id": use_creds.get('AccessKeyId'),
+            "aws_secret_access_key": use_creds.get('SecretAccessKey')
+        }
+        if region is not None:
+            args["region_name"] = region
+
+        if 'SessionToken' in use_creds:
+            args['aws_session_token'] = use_creds.get('SessionToken')
+
+        return boto3.session.Session(**args)
+    else:
+        return botocore.session.get_session()
+
+
 def generate_client(service: str, region: str, credentials):
-    use_creds = _validate_credentials(credentials)
-    args = {
-        "service_name": service,
-        "aws_access_key_id": use_creds.get('AccessKeyId'),
-        "aws_secret_access_key": use_creds.get('SecretAccessKey')
-    }
-    if region is not None:
-        args["region_name"] = region
+    session = create_session(credentials=credentials, region=region)
 
-    if 'SessionToken' in use_creds:
-        args['aws_session_token'] = use_creds.get('SessionToken')
-
-    return boto3.client(**args)
+    return session.client(service)
 
 
 def generate_resource(service: str, region: str, credentials):
@@ -333,7 +358,7 @@ def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, 
 
         response = lf_client.grant_permissions(**args)
 
-        logger.info(f"Granted LakeFormation Permissions {permissions} to {principal}")
+        logger.info(f"Granted LakeFormation Permissions {permissions} on {database_name}.{table_name} to {principal}")
 
         return response
     except lf_client.exceptions.from_code('AlreadyExistsException') as aee:
@@ -346,7 +371,14 @@ def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, 
             # this occurs because we are granting any IAM principal to describe the table, which means that the previous creation of the grant is already in place. ignore
             return None
         else:
+            logger.error(
+                f"Exception while granting LakeFormation Permissions {permissions} on {database_name}.{table_name} to {principal}")
             raise iie
+    except Exception as eve:
+        logger.error(eve)
+        print(eve)
+
+        raise eve
 
 
 def accept_pending_lf_resource_share(logger, ram_client, sender_account: str):
@@ -363,9 +395,6 @@ def accept_pending_lf_resource_share(logger, ram_client, sender_account: str):
             )
             accepted_one = True
             logger.info("Accepted RAM Share")
-
-    if accepted_one is False:
-        raise Exception("No Available RAM Shares to Accept")
 
 
 def create_crawler(glue_client, crawler_role: str, database_name: str, table_name: str, s3_location: str,

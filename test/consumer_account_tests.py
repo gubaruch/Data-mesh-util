@@ -32,6 +32,9 @@ class ConsumerAccountTests(unittest.TestCase):
     _mgr = dmc.DataMeshConsumer(data_mesh_account_id=MESH_ACCOUNT, log_level=logging.DEBUG)
     _logger = logging.getLogger("DataMeshConsumer")
 
+    def setUp(self) -> None:
+        warnings.filterwarnings("ignore", category=ResourceWarning)
+
     def test_create_subscription(self):
         sub = self._mgr.request_access_to_product(
             owner_account_id=PRODUCER_ACCOUNT,

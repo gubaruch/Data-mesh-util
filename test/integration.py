@@ -24,13 +24,17 @@ class DataMeshIntegrationTests(unittest.TestCase):
     _client, _account_ids, _creds = utils.load_client_info_from_file(from_path=os.getenv('CredentialsFile'),
                                                                      region_name=os.getenv('AWS_REGION'))
 
+    # create a subscriber tracker that is bound into the Mesh account, that will help us to inspect what's happening behind the scenes
     _subscription_tracker = SubscriberTracker(credentials=boto3.session.Session().get_credentials(),
                                               data_mesh_account_id=_account_ids.get('Mesh'),
                                               region_name=_current_region,
                                               log_level=_log_level)
 
+    # create a data producer class in the Producer Account
     _producer = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get(MESH),
                                      use_credentials=_creds.get(PRODUCER))
+
+    # create a data consumer class in the Consumer Account
     _consumer = dmc.DataMeshConsumer(data_mesh_account_id=_account_ids.get(MESH),
                                      use_credentials=_creds.get(CONSUMER))
 
@@ -46,6 +50,7 @@ class DataMeshIntegrationTests(unittest.TestCase):
             table_name_regex=t
         )
 
+        # make sure we can get it back
         data_product = self._producer.get_data_product(database_name=db, table_name_regex=t)
         self.assertIsNotNone(data_product)
         self.assertEqual(len(data_product), 1)
@@ -53,10 +58,11 @@ class DataMeshIntegrationTests(unittest.TestCase):
         # request access from the consumer
         requested_subscription = self._consumer.request_access_to_product(
             owner_account_id=self._account_ids.get('Producer'),
-            database_name=db,
-            tables=[t], request_permissions=['SELECT'],
-            requesting_principal=self._account_ids.get(
-                'Consumer'))
+            database_name=f"{db}-{self._account_ids.get(MESH)}",
+            tables=[t], request_permissions=['SELECT']
+        )
+
+        # verify that we can retrieve the subscription
         subscription = self._consumer.get_subscription(request_id=requested_subscription.get("SubscriptionId"))
         self.assertIsNotNone(subscription)
         self.assertEqual(subscription.get('Status'), STATUS_PENDING)
@@ -67,6 +73,7 @@ class DataMeshIntegrationTests(unittest.TestCase):
             grant_permissions=requested_subscription.get("RequestedGrants"),
             grantable_permissions=None, decision_notes='Approved'
         )
+        # confirm that the consumer can see that it's status is now Active
         subscription = self._consumer.get_subscription(request_id=requested_subscription.get("SubscriptionId"))
         self.assertIsNotNone(subscription)
         self.assertEqual(subscription.get('Status'), STATUS_ACTIVE)

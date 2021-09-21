@@ -22,6 +22,9 @@ class DataMeshAdminAccountTests(unittest.TestCase):
     _client, _account_ids, _creds = utils.load_client_info_from_file(from_path=os.getenv('CredentialsFile'),
                                                                      region_name=os.getenv('AWS_REGION'))
 
+    def setUp(self) -> None:
+        warnings.filterwarnings("ignore", category=ResourceWarning)
+
     def test_setup_data_mesh_account(self):
         mgr = dmu.DataMeshAdmin(data_mesh_account_id=MESH_ACCOUNT, region_name='eu-west-1',
                                 log_level=logging.DEBUG, use_creds=self._creds.get(MESH))

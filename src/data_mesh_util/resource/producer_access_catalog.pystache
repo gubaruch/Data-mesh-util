@@ -10,15 +10,6 @@
             "Resource": "*"
         },
         {
-            "Sid": "ProducerAccess1",
-            "Effect": "Allow",
-            "Action": [
-                "s3:PutBucketPolicy",
-                "s3:GetBucketPolicy"
-            ],
-            "Resource": ["arn:aws:s3:::{{bucket}}"]
-        },
-        {
             "Sid": "ProducerAccess2",
             "Effect": "Allow",
             "Action": [
@@ -29,7 +20,9 @@
                 "glue:GetDatabase",
                 "glue:CreateDatabase",
                 "glue:CreateTable",
-                "glue:CreateCrawler"
+                "glue:CreateTables",
+                "glue:CreateCrawler",
+                "glue:Update*"
             ],
             "Resource": "*"
         },

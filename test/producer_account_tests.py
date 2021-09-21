@@ -43,6 +43,8 @@ class DataMeshProducerAccountTests(unittest.TestCase):
                                               credentials=_data_mesh_sts_session.get('Credentials'),
                                               region_name=_current_region,
                                               log_level=logging.DEBUG)
+    def setUp(self) -> None:
+        warnings.filterwarnings("ignore", category=ResourceWarning)
 
     def test_create_data_product(self):
         self._mgr.create_data_products(

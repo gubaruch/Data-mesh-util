@@ -249,22 +249,22 @@ class SubscriberTracker:
     def create_subscription_request(self, owner_account_id: str, database_name: str, tables: list, principal: str,
                                     request_grants: list, suppress_object_validation: bool = False):
         # look up if there is already a subscription request for this object
-        database_attr = Attr(DATABASE_NAME).eq(database_name)
+        filter = And(Attr(DATABASE_NAME).eq(database_name), Attr(STATUS).eq(STATUS_PENDING))
 
-        def _sub_exists(filter):
+        def _sub_exists():
             found = self._table.query(
                 IndexName=self.subscriber_indexname(),
-                Select='SPECIFIC_ATTRIBUTES',
-                ProjectionExpression=SUBSCRIPTION_ID,
+                Select='ALL_ATTRIBUTES',
                 ConsistentRead=False,
                 KeyConditionExpression=Key(SUBSCRIBER_PRINCIPAL).eq(principal),
                 FilterExpression=filter
             )
 
-            if found.get('Count') == 1:
-                return found.get('Items')[0].get(SUBSCRIPTION_ID)
-            else:
-                return None
+            for i in found.get('Items'):
+                if tables == i.get(TABLE_NAME) and request_grants == i.get(REQUESTED_GRANTS):
+                    return i.get(SUBSCRIPTION_ID)
+
+            return None
 
         def _create_subscription(item, principal):
             # generate a new subscription
@@ -281,7 +281,7 @@ class SubscriberTracker:
             if not exists:
                 raise Exception("Database %s does not exist" % (database_name))
             else:
-                sub_id = _sub_exists(database_attr)
+                sub_id = _sub_exists()
                 if sub_id is not None:
                     sub_id = _generate_id()
 
@@ -306,7 +306,7 @@ class SubscriberTracker:
                                    suppress_object_validation=suppress_object_validation)
 
             # check if a subscription already exists
-            subscription_id = _sub_exists(Attr(TABLE_NAME).is_in(tables))
+            subscription_id = _sub_exists()
 
             if subscription_id is None:
                 subscription_id = _generate_id()

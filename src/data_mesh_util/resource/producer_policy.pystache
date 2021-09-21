@@ -47,8 +47,12 @@
             "Action": [
                 "lakeformation:DescribeResource",
                 "lakeformation:GrantPermissions",
+                "lakeformation:RevokePermissions",
                 "lakeformation:ListPermissions",
                 "lakeformation:ListResources",
+                "lakeformation:GetDataLakeSettings",
+                "lakeformation:GetEffectivePermissionsForPath",
+                "lakeformation:GetDataAccess",
                 "lakeformation:PutDataLakeSettings",
                 "lakeformation:RegisterResource",
                 "lakeformation:UpdateResource"
