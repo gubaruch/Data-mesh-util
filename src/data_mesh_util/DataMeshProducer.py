@@ -277,8 +277,8 @@ class DataMeshProducer:
         # in the producer account, accept the RAM share after 1 second - seems to be an async delay
         if created_object is not None:
             time.sleep(1)
-            utils.accept_pending_lf_resource_share(ram_client=producer_ram_client, sender_account=data_mesh_account_id,
-                                                   logger=self._logger)
+            utils.accept_pending_lf_resource_shares(ram_client=producer_ram_client, sender_account=data_mesh_account_id,
+                                                    logger=self._logger)
 
             # create a resource link for the data mesh table in producer account
             link_table_name = "%s_link" % table_name

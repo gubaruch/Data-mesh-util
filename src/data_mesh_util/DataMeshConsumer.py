@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
-from data_mesh_util.lib.SubscriberTracker import SubscriberTracker
+from data_mesh_util.lib.SubscriberTracker import *
 
 
 class DataMeshConsumer:
@@ -26,6 +26,7 @@ class DataMeshConsumer:
     _data_mesh_sts_session = None
     _session = None
     _iam_client = None
+    _ram_client = None
     _sts_client = None
     _config = {}
     _current_region = None
@@ -42,10 +43,12 @@ class DataMeshConsumer:
         if use_credentials is not None:
             self._session = utils.create_session(credentials=use_credentials, region=self._current_region)
             self._iam_client = self._session.client('iam')
+            self._ram_client = self._session.client('ram')
             self._sts_client = self._session.client('sts')
         else:
             self._session = botocore.session.get_session()
             self._iam_client = boto3.client('iam')
+            self._ram_client = boto3.client('ram')
             self._sts_client = boto3.client('sts')
 
         self._log_level = log_level
@@ -94,6 +97,24 @@ class DataMeshConsumer:
             request_grants=request_permissions,
             suppress_object_validation=True
         )
+
+    def finalize_subscription(self, subscription_id: str):
+        '''
+        Finalizes the process of requesting access to a data product. This imports the granted subscription into the consumer's account
+        :param subscription_id:
+        :return:
+        '''
+        # grab the subscription
+        subscription = self._subscription_tracker.get_subscription(subscription_id=subscription_id)
+
+        for share in subscription.get(RAM_SHARES).items():
+            utils.accept_pending_lf_resource_shares(
+                logger=self._logger, ram_client=self._ram_client,
+                sender_account=self._data_mesh_account_id,
+                filter_resource_arn=share[1]
+            )
+
+        # accept each of the resource sharess on the subscription
 
     def list_product_access(self, principal_id: str):
         '''

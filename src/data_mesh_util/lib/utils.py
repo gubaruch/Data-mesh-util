@@ -334,7 +334,8 @@ def generate_resource(service: str, region: str, credentials):
     return boto3.resource(**args)
 
 
-def lf_grant_permissions(logger, data_mesh_account_id, lf_client, principal: str, database_name: str, table_name: str = None,
+def lf_grant_permissions(logger, data_mesh_account_id, lf_client, principal: str, database_name: str,
+                         table_name: str = None,
                          permissions: list = ['ALL'],
                          grantable_permissions: list = ['ALL']):
     try:
@@ -392,20 +393,18 @@ def lf_grant_permissions(logger, data_mesh_account_id, lf_client, principal: str
         raise eve
 
 
-def accept_pending_lf_resource_share(logger, ram_client, sender_account: str):
-    accepted_one = False
-    get_response = ram_client.get_resource_share_invitations(
-    )
+def accept_pending_lf_resource_shares(logger, ram_client, sender_account: str, filter_resource_arn: str = None):
+    get_response = ram_client.get_resource_share_invitations()
 
     for r in get_response.get('resourceShareInvitations'):
         # only accept lakeformation shares
         if r.get('senderAccountId') == sender_account and 'LakeFormation' in r.get('resourceShareName') and r.get(
                 'status') == 'PENDING':
-            ram_client.accept_resource_share_invitation(
-                resourceShareInvitationArn=r.get('resourceShareInvitationArn')
-            )
-            accepted_one = True
-            logger.info("Accepted RAM Share")
+            if filter_resource_arn is None or r.get('resourceShareArn') == filter_resource_arn:
+                ram_client.accept_resource_share_invitation(
+                    resourceShareInvitationArn=r.get('resourceShareInvitationArn')
+                )
+                logger.info(f"Accepted RAM Share {r.get('resourceShareInvitationArn')}")
 
 
 def create_crawler(glue_client, crawler_role: str, database_name: str, table_name: str, s3_location: str,

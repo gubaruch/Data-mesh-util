@@ -73,6 +73,10 @@ class DataMeshIntegrationTests(unittest.TestCase):
             grant_permissions=requested_subscription.get("RequestedGrants"),
             grantable_permissions=None, decision_notes='Approved'
         )
+
+        # finalize the subscription
+        self._consumer.finalize_subscription(subscription_id=requested_subscription.get("SubscriptionId"))
+
         # confirm that the consumer can see that it's status is now Active
         subscription = self._consumer.get_subscription(request_id=requested_subscription.get("SubscriptionId"))
         self.assertIsNotNone(subscription)

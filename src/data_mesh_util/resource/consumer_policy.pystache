@@ -45,9 +45,9 @@
                 "glue:ListRegistries"
             ],
             "Resource": [
-                "arn:aws:glue:*:{{data_mesh_account_id}}:catalog",
-                "arn:aws:glue:*:{{data_mesh_account_id}}:*/*",
-                "arn:aws:lakeformation:*:{{data_mesh_account_id}}:*/*"
+                "arn:aws:glue:*::catalog",
+                "arn:aws:glue:*::*/*",
+                "arn:aws:lakeformation:*::*/*"
             ]
         },
         {
@@ -64,6 +64,22 @@
                 "arn:aws:dynamodb:*:{{data_mesh_account_id}}:table/AwsDataMeshSubscriptions",
                 "arn:aws:dynamodb:*:{{data_mesh_account_id}}:table/AwsDataMeshSubscriptions/index/AwsDataMeshSubscriptions-Subscriber",
                 "arn:aws:dynamodb:*:{{data_mesh_account_id}}:table/AwsDataMeshSubscriptions/index/AwsDataMeshSubscriptions-Owner"
+            ]
+        },
+        {
+            "Sid": "VisualEditor2",
+            "Effect": "Allow",
+            "Action": [
+                "ram:List*",
+                "ram:Get*",
+                "ram:CreateResourceShare",
+                "ram:AcceptResourceShareInvitation",
+                "ram:RejectResourceShareInvitation",
+                "ram:Associate*",
+                "ram:Disassociate*"
+            ],
+            "Resource": [
+                "*"
             ]
         }
     ]
