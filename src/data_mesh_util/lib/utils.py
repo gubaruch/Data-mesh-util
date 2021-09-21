@@ -99,6 +99,8 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
             Tags=DEFAULT_TAGS
         )
         policy_arn = response.get('Policy').get('Arn')
+        waiter = iam_client.waiter('policy_exists')
+        waiter.wait(PolicyArn=policy_arn)
     except iam_client.exceptions.EntityAlreadyExistsException:
         policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
 
@@ -113,8 +115,8 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         )
         logger.info(f"Created new User {role_name}")
 
-        # have to sleep for a second here, as there appears to be eventual consistency between create_user and create_role
-        time.sleep(.5)
+        waiter = iam_client.get_waiter('user_exists')
+        waiter.wait(UserName=role_name)
     except iam_client.exceptions.EntityAlreadyExistsException:
         pass
 
@@ -159,6 +161,10 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         )
 
         role_arn = role_response.get('Role').get('Arn')
+
+        # wait for role active
+        waiter = iam_client.waiter('role_exists')
+        waiter.wait(RoleName=role_name)
     except iam_client.exceptions.EntityAlreadyExistsException:
         role_arn = iam_client.get_role(RoleName=role_name).get(
             'Role').get('Arn')
@@ -340,6 +346,10 @@ def lf_grant_permissions(logger, lf_client, principal: str, database_name: str, 
             table_spec['TableWildcard'] = {}
         else:
             table_spec['Name'] = table_name
+
+        # always grant describe even if not requested
+        if 'DESCRIBE' not in permissions:
+            permissions.append('DESCRIBE')
 
         args = {
             "Principal": {
