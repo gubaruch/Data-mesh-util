@@ -312,13 +312,21 @@ class DataMeshProducer:
         finished_reading = False
         last_token = None
         all_tables = []
+
+        def _no_data():
+            raise Exception("Unable to find any Tables matching %s in Database %s" % (table_name_regex,
+                                                                                      source_db_name))
+
         while finished_reading is False:
             if last_token is not None:
                 get_tables_args['NextToken'] = last_token
 
-            get_table_response = glue_client.get_tables(
-                **get_tables_args
-            )
+            try:
+                get_table_response = glue_client.get_tables(
+                    **get_tables_args
+                )
+            except glue_client.EntityNotFoundException:
+                _no_data()
 
             if 'NextToken' in get_table_response:
                 last_token = get_table_response.get('NextToken')
@@ -327,8 +335,7 @@ class DataMeshProducer:
 
             # add the tables returned from this instance of the request
             if not get_table_response.get('TableList'):
-                raise Exception("Unable to find any Tables matching %s in Database %s" % (table_name_regex,
-                                                                                          source_db_name))
+                _no_data()
             else:
                 all_tables.extend(get_table_response.get('TableList'))
 
