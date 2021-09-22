@@ -246,6 +246,9 @@ class DataMeshProducer:
         )
         self._logger.info("Validated Data Mesh Database %s" % data_mesh_database_name)
 
+        # set default permissions on db
+        utils.configure_db_permissions(glue_client=data_mesh_glue_client, database_name=data_mesh_database_name)
+
         # grant the producer permissions to create tables on this database
         utils.lf_grant_permissions(
             data_mesh_account_id=self._data_mesh_account_id, lf_client=data_mesh_lf_client,

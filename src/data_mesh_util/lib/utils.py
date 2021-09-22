@@ -206,6 +206,19 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
     return role_arn, user_arn, group_arn
 
 
+def add_datalake_admin(lf_client, principal: str):
+    admins = lf_client.get_data_lake_settings().get('DataLakeSettings').get("DataLakeAdmins")
+
+    admins.append({
+        'DataLakePrincipalIdentifier': principal
+    })
+    lf_client.put_data_lake_settings(
+        DataLakeSettings={
+            'DataLakeAdmins': admins
+        }
+    )
+
+
 def flatten_default_tags():
     output = {}
     for t in DEFAULT_TAGS:
@@ -242,6 +255,16 @@ def get_or_create_database(glue_client, database_name: str, database_desc: str, 
         glue_client.create_database(
             **args
         )
+
+
+def configure_db_permissions(glue_client, database_name: str):
+    glue_client.update_database(
+        Name=database_name,
+        DatabaseInput={
+            "Name": database_name,
+            "CreateTableDefaultPermissions": []
+        }
+    )
 
 
 def create_assume_role_policy(iam_client, account_id: str, policy_name: str, role_arn: str, logger):

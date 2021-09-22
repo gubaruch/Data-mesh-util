@@ -26,6 +26,7 @@ class DataMeshConsumer:
     _data_mesh_sts_session = None
     _session = None
     _iam_client = None
+    _lf_client = None
     _ram_client = None
     _lf_client = None
     _sts_client = None
@@ -118,14 +119,10 @@ class DataMeshConsumer:
             source_account=self._data_mesh_account_id
         )
 
-        for share in subscription.get(RAM_SHARES).items():
-            utils.accept_pending_lf_resource_shares(
-                logger=self._logger, ram_client=self._ram_client,
-                sender_account=self._data_mesh_account_id,
-                filter_resource_arn=share[1]
-            )
-
-        # accept each of the resource sharess on the subscription
+        utils.accept_pending_lf_resource_shares(
+            logger=self._logger, ram_client=self._ram_client,
+            sender_account=self._data_mesh_account_id
+        )
 
     def list_product_access(self, principal_id: str):
         '''
