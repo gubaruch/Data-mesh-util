@@ -311,6 +311,9 @@ class DataMeshAdmin:
         self._iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
         self._logger.info(f"Bound {policy_arn} to Group {group_name}")
 
+        # make the iam role a lakeformation admin
+        utils.add_datalake_admin(lf_client=self._lf_client, principal=iam_details[0])
+
         return iam_details
 
     def initialize_consumer_account(self):
