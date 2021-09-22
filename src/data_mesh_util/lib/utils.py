@@ -99,7 +99,7 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
             Tags=DEFAULT_TAGS
         )
         policy_arn = response.get('Policy').get('Arn')
-        waiter = iam_client.waiter('policy_exists')
+        waiter = iam_client.get_waiter('policy_exists')
         waiter.wait(PolicyArn=policy_arn)
     except iam_client.exceptions.EntityAlreadyExistsException:
         policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
@@ -163,7 +163,7 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         role_arn = role_response.get('Role').get('Arn')
 
         # wait for role active
-        waiter = iam_client.waiter('role_exists')
+        waiter = iam_client.get_waiter('role_exists')
         waiter.wait(RoleName=role_name)
     except iam_client.exceptions.EntityAlreadyExistsException:
         role_arn = iam_client.get_role(RoleName=role_name).get(
@@ -339,29 +339,39 @@ def lf_grant_permissions(logger, data_mesh_account_id, lf_client, principal: str
                          permissions: list = ['ALL'],
                          grantable_permissions: list = ['ALL']):
     try:
-        table_spec = {
-            'CatalogId': data_mesh_account_id,
-            'DatabaseName': database_name
-        }
-        if table_name is None or table_name == "*":
-            table_spec['TableWildcard'] = {}
-        else:
-            table_spec['Name'] = table_name
-
-        # always grant describe even if not requested
-        if 'DESCRIBE' not in permissions:
-            permissions.append('DESCRIBE')
-
         args = {
             "CatalogId": data_mesh_account_id,
             "Principal": {
                 'DataLakePrincipalIdentifier': principal
             },
-            "Resource": {
-                'Table': table_spec
-            },
             "Permissions": permissions
         }
+
+        if table_name is not None:
+            db_spec = {
+                'CatalogId': data_mesh_account_id,
+                'DatabaseName': database_name
+            }
+            if table_name == "*":
+                db_spec['TableWildcard'] = {}
+            else:
+                db_spec['Name'] = table_name
+
+            args["Resource"] = {
+                'Table': db_spec
+            }
+        else:
+            # create a database grant
+            args['Resource'] = {
+                'Database': {
+                    'CatalogId': data_mesh_account_id,
+                    'Name': database_name
+                }
+            }
+
+        # always grant describe even if not requested
+        if 'DESCRIBE' not in permissions:
+            permissions.append('DESCRIBE')
 
         if grantable_permissions is not None:
             args["PermissionsWithGrantOption"] = grantable_permissions
@@ -370,7 +380,11 @@ def lf_grant_permissions(logger, data_mesh_account_id, lf_client, principal: str
 
         response = lf_client.grant_permissions(**args)
 
-        logger.info(f"Granted LakeFormation Permissions {permissions} on {database_name}.{table_name} to {principal}")
+        report_t = ""
+        if table_name is not None:
+            report_t = f".{table_name}"
+
+        logger.info(f"Granted LakeFormation Permissions {permissions} on {database_name}{report_t} to {principal}")
 
         return response
     except lf_client.exceptions.from_code('AlreadyExistsException') as aee:

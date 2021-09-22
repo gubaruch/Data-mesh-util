@@ -250,9 +250,9 @@ class DataMeshProducer:
                 DatabaseName=data_mesh_database_name,
                 TableInput=t
             )
-            self._logger.info("Created new Glue Table")
+            self._logger.info(f"Created new Glue Table {table_name}")
         except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
-            self._logger.info("Glue Table Already Exists")
+            self._logger.info(f"Glue Table {table_name} Already Exists")
 
         # grant access to the producer account
         perms = ['ALL']
@@ -292,9 +292,9 @@ class DataMeshProducer:
                                                 }
                                 }
                 )
-                self._logger.info("Created Resource Link Table")
+                self._logger.info(f"Created Resource Link Table {link_table_name}")
             except producer_glue_client.exceptions.from_code('AlreadyExistsException'):
-                self._logger.info("Resource Link Table Already Exists")
+                self._logger.info(f"Resource Link Table {link_table_name} Already Exists")
 
             return table_name, link_table_name
 
@@ -468,6 +468,16 @@ class DataMeshProducer:
         tables = subscription.get(TABLE_NAME)
         ram_shares = {}
         for t in tables:
+            # grant describe on the database
+            utils.lf_grant_permissions(
+                data_mesh_account_id=self._data_mesh_account_id,
+                lf_client=data_mesh_lf_client,
+                principal=subscription.get(SUBSCRIBER_PRINCIPAL),
+                database_name=subscription.get(DATABASE_NAME),
+                permissions=['DESCRIBE'],
+                grantable_permissions=None, logger=self._logger
+            )
+
             # grant validated permissions to object
             utils.lf_grant_permissions(
                 data_mesh_account_id=self._data_mesh_account_id,
@@ -496,7 +506,7 @@ class DataMeshProducer:
                 for p in perm.get('PrincipalResourcePermissions'):
                     if p.get('Principal').get('DataLakePrincipalIdentifier') == subscription.get(
                             SUBSCRIBER_PRINCIPAL) and 'DESCRIBE' in p.get(
-                            'Permissions'):
+                        'Permissions'):
                         ram_shares[t] = p.get('AdditionalDetails').get('ResourceShare')[0]
             else:
                 raise Exception("Unable to Load RAM Share for Permission")

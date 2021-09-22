@@ -27,6 +27,7 @@ class DataMeshConsumer:
     _session = None
     _iam_client = None
     _ram_client = None
+    _lf_client = None
     _sts_client = None
     _config = {}
     _current_region = None
@@ -45,11 +46,13 @@ class DataMeshConsumer:
             self._iam_client = self._session.client('iam')
             self._ram_client = self._session.client('ram')
             self._sts_client = self._session.client('sts')
+            self._glue_client = self._session.client('glue')
         else:
             self._session = botocore.session.get_session()
             self._iam_client = boto3.client('iam')
             self._ram_client = boto3.client('ram')
             self._sts_client = boto3.client('sts')
+            self._glue_client = boto3.client('glue')
 
         self._log_level = log_level
         self._logger.setLevel(log_level)
@@ -106,6 +109,14 @@ class DataMeshConsumer:
         '''
         # grab the subscription
         subscription = self._subscription_tracker.get_subscription(subscription_id=subscription_id)
+
+        # create a shared database reference
+        utils.get_or_create_database(
+            glue_client=self._glue_client,
+            database_name=subscription.get(DATABASE_NAME),
+            database_desc="Database to contain objects from Producer Database %s.%s" % (
+                subscription.get(OWNER_PRINCIPAL), subscription.get(DATABASE_NAME))
+        )
 
         for share in subscription.get(RAM_SHARES).items():
             utils.accept_pending_lf_resource_shares(

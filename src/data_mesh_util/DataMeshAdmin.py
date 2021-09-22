@@ -101,7 +101,8 @@ class DataMeshAdmin:
             role_name=DATA_MESH_MANAGER_ROLENAME,
             role_desc='Role to be used for the Data Mesh Manager function',
             account_id=self._data_mesh_account_id,
-            config=self._config)
+            config=self._config,
+            logger=self._logger)
         data_mesh_mgr_role_arn = mgr_tuple[0]
 
         self._logger.info("Validated Data Mesh Manager Role %s" % data_mesh_mgr_role_arn)
@@ -139,7 +140,8 @@ class DataMeshAdmin:
             role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME,
             role_desc='Role to be used for all Data Mesh Producer Accounts',
             account_id=self._data_mesh_account_id,
-            config=self._config)
+            config=self._config,
+            logger=self._logger)
         producer_iam_role_arn = producer_tuple[0]
 
         self._logger.info("Validated Data Mesh Producer Role %s" % producer_iam_role_arn)
@@ -174,7 +176,8 @@ class DataMeshAdmin:
             role_name=DATA_MESH_ADMIN_CONSUMER_ROLENAME,
             role_desc='Role to be used for all Data Mesh Consumer Accounts',
             account_id=self._data_mesh_account_id,
-            config=self._config)
+            config=self._config,
+            logger=self._logger)
 
     def _api_tuple(self, item_tuple: tuple):
         return {
