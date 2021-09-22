@@ -114,8 +114,8 @@ class DataMeshConsumer:
         utils.get_or_create_database(
             glue_client=self._glue_client,
             database_name=subscription.get(DATABASE_NAME),
-            database_desc="Database to contain objects from Producer Database %s.%s" % (
-                subscription.get(OWNER_PRINCIPAL), subscription.get(DATABASE_NAME))
+            database_desc=f"Database to contain objects from Producer Database {subscription.get(OWNER_PRINCIPAL)}.{subscription.get(DATABASE_NAME)}",
+            source_account=self._data_mesh_account_id
         )
 
         for share in subscription.get(RAM_SHARES).items():

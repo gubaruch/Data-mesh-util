@@ -205,7 +205,7 @@ def flatten_default_tags():
     return output
 
 
-def get_or_create_database(glue_client, database_name: str, database_desc: str):
+def get_or_create_database(glue_client, database_name: str, database_desc: str, source_account: str = None):
     database_exists = None
     try:
         database_exists = glue_client.get_database(
@@ -215,12 +215,23 @@ def get_or_create_database(glue_client, database_name: str, database_desc: str):
         pass
 
     if database_exists is None or 'Database' not in database_exists:
-        # create the database
-        glue_client.create_database(
-            DatabaseInput={
+        args = {
+            "DatabaseInput": {
                 "Name": database_name,
                 "Description": database_desc,
             }
+        }
+
+        if source_account is not None:
+            args['DatabaseInput']['TargetDatabase'] = {
+                "CatalogId": source_account,
+                "DatabaseName": database_name
+            }
+            del args['DatabaseInput']["Description"]
+
+        # create the database
+        glue_client.create_database(
+            **args
         )
 
 
