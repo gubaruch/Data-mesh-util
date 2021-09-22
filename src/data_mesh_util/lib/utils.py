@@ -118,7 +118,7 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         waiter = iam_client.get_waiter('user_exists')
         waiter.wait(UserName=role_name)
     except iam_client.exceptions.EntityAlreadyExistsException:
-        pass
+        logger.info(f"User {role_name} already exists.  No action required.")
 
     user_arn = "arn:aws:iam::%s:user%s%s" % (account_id, DATA_MESH_IAM_PATH, role_name)
 
@@ -131,7 +131,7 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         )
         logger.info(f"Created new Group {group_name}")
     except iam_client.exceptions.EntityAlreadyExistsException:
-        pass
+        logger.info(f"Group {group_name} already exists.  No action required.")
 
     group_arn = "arn:aws:iam::%s:group%s%sGroup" % (account_id, DATA_MESH_IAM_PATH, role_name)
 
@@ -143,32 +143,41 @@ def configure_iam(iam_client, policy_name: str, policy_desc: str, policy_templat
         )
         logger.info(f"Added User {role_name} to Group {group_name}")
     except iam_client.exceptions.EntityAlreadyExistsException:
-        pass
+        logger.info(f"User {role_name} already in {group_name}.  No action required.")
 
     role_arn = None
-    try:
-        # now create the IAM Role with a trust policy to the indicated principal and the root user
-        aws_principals = [user_arn, ("arn:aws:iam::%s:root" % account_id)]
+    # Horrible retry logic required to avoid boto3 exception using a role as a principal too soon after it's been created
+    retries = 0
+    while True:
+        try:
+            # now create the IAM Role with a trust policy to the indicated principal and the root user
+            aws_principals = [user_arn, ("arn:aws:iam::%s:root" % account_id)]
+            role_response = iam_client.create_role(
+                Path=DATA_MESH_IAM_PATH,
+                RoleName=role_name,
+                AssumeRolePolicyDocument=json.dumps(
+                    create_assume_role_doc(aws_principals=aws_principals,
+                                           additional_principals=additional_assuming_principals)),
+                Description=role_desc,
+                Tags=DEFAULT_TAGS
+            )
 
-        role_response = iam_client.create_role(
-            Path=DATA_MESH_IAM_PATH,
-            RoleName=role_name,
-            AssumeRolePolicyDocument=json.dumps(
-                create_assume_role_doc(aws_principals=aws_principals,
-                                       additional_principals=additional_assuming_principals)),
-            Description=role_desc,
-            Tags=DEFAULT_TAGS
-        )
+            role_arn = role_response.get('Role').get('Arn')
 
-        role_arn = role_response.get('Role').get('Arn')
-
-        # wait for role active
-        waiter = iam_client.get_waiter('role_exists')
-        waiter.wait(RoleName=role_name)
-    except iam_client.exceptions.EntityAlreadyExistsException:
-        role_arn = iam_client.get_role(RoleName=role_name).get(
-            'Role').get('Arn')
-
+            # wait for role active
+            waiter = iam_client.get_waiter('role_exists')
+            waiter.wait(RoleName=role_name)
+        except iam_client.exceptions.EntityAlreadyExistsException:
+            role_arn = iam_client.get_role(RoleName=role_name).get(
+                'Role').get('Arn')
+        except iam_client.exceptions.MalformedPolicyDocumentException:
+            logger.info(f"Error creating role {role_name}. Backing off....")
+            retries += 1
+            if retries > 5:
+                raise
+            time.sleep(3)
+            continue
+        break
     logger.info(f"Validated Role {role_name} as {role_arn}")
 
     # attach the created policy to the role
