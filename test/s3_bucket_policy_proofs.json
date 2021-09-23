@@ -1,0 +1,78 @@
+{
+  "New": {
+    "Statement": [
+      {
+        "Sid": "AwsDataMeshUtilsBucketPolicyStatement-org-1-data",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": [
+            "arn:aws:iam::600214582022:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess"
+          ]
+        },
+        "Action": [
+          "s3:GetObject*"
+        ],
+        "Resource": [
+          "arn:aws:s3:::org-1-data",
+          "arn:aws:s3:::org-1-data/*"
+        ]
+      }
+    ]
+  },
+  "NewPrincipal": {
+    "Statement": [
+      {
+        "Sid": "AwsDataMeshUtilsBucketPolicyStatement-org-1-data",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": [
+            "arn:aws:iam::600214582022:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess",
+            "arn:aws:iam::887210671223:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess"
+          ]
+        },
+        "Action": [
+          "s3:GetObject*"
+        ],
+        "Resource": [
+          "arn:aws:s3:::org-1-data",
+          "arn:aws:s3:::org-1-data/*"
+        ]
+      }
+    ]
+  },
+  "NoDataMesh": {
+    "Statement": [
+      {
+        "Sid": "1234567890",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": [
+            "600214582022"
+          ]
+        },
+        "Action": [
+          "ram:AcceptSharingInvitation"
+        ],
+        "Resource": [
+          "*"
+        ]
+      },
+      {
+        "Sid": "AwsDataMeshUtilsBucketPolicyStatement-org-1-data",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": [
+            "arn:aws:iam::600214582022:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess"
+          ]
+        },
+        "Action": [
+          "s3:GetObject*"
+        ],
+        "Resource": [
+          "arn:aws:s3:::org-1-data",
+          "arn:aws:s3:::org-1-data/*"
+        ]
+      }
+    ]
+  }
+}
