@@ -30,7 +30,7 @@ class ApiAutomatorTests(unittest.TestCase):
     def test_new_s3_bucket_policy(self):
         new_policy = self._automator._transform_bucket_policy(
             bucket_policy=None, principal_account=PRODUCER_ACCOUNT,
-            bucket_name='s3://org-1-data'
+            access_path='s3://org-1-data'
         )
         self.assertEqual(self._proofs.get('New').get('Statement'), new_policy.get('Statement'))
 
@@ -58,7 +58,7 @@ class ApiAutomatorTests(unittest.TestCase):
             ]}
         new_policy = self._automator._transform_bucket_policy(
             bucket_policy=starting_policy, principal_account=PRODUCER_ACCOUNT,
-            bucket_name='s3://org-1-data'
+            access_path='s3://org-1-data'
         )
         self.assertEqual(self._proofs.get('NoDataMesh').get('Statement'), new_policy.get('Statement'))
 
@@ -77,7 +77,8 @@ class ApiAutomatorTests(unittest.TestCase):
                         ]
                     },
                     "Action": [
-                        "s3:GetObject*"
+                        "s3:Get*",
+                        "s3:List*"
                     ],
                     "Resource": [
                         "arn:aws:s3:::org-1-data",
@@ -87,7 +88,7 @@ class ApiAutomatorTests(unittest.TestCase):
             ]}
         new_policy = self._automator._transform_bucket_policy(
             bucket_policy=starting_policy, principal_account=MESH_ACCOUNT,
-            bucket_name='s3://org-1-data'
+            access_path='s3://org-1-data'
         )
         self.assertEqual(self._proofs.get('NewPrincipal').get('Statement'), new_policy.get('Statement'))
 
@@ -106,7 +107,8 @@ class ApiAutomatorTests(unittest.TestCase):
                         ]
                     },
                     "Action": [
-                        "s3:GetObject*"
+                        "s3:Get*",
+                        "s3:List*"
                     ],
                     "Resource": [
                         "arn:aws:s3:::org-1-data",
@@ -116,6 +118,6 @@ class ApiAutomatorTests(unittest.TestCase):
             ]}
         new_policy = self._automator._transform_bucket_policy(
             bucket_policy=starting_policy, principal_account=PRODUCER_ACCOUNT,
-            bucket_name='s3://org-1-data'
+            access_path='s3://org-1-data'
         )
         self.assertEqual(self._proofs.get('New').get('Statement'), new_policy.get('Statement'))

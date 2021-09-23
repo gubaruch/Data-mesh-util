@@ -339,6 +339,15 @@ class DataMeshAdmin:
         # make the iam role a lakeformation admin
         utils.add_datalake_admin(lf_client=self._lf_client, principal=iam_details[0])
 
+        # create a service linked role for lakeformation
+        try:
+            self._iam_client.create_service_linked_role(
+                AWSServiceName='lakeformation.amazonaws.com'
+            )
+            self._logger.info("Created new Service Linked Role for AWS LakeFormation")
+        except self._iam_client.exceptions.AlreadyExistsException:
+            pass
+
         return iam_details
 
     def initialize_consumer_account(self):

@@ -9,6 +9,8 @@ import botocore.session
 import shortuuid
 import logging
 
+from data_mesh_util.lib.ApiAutomator import ApiAutomator
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "resource"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 
@@ -27,6 +29,7 @@ class DataMeshProducer:
     _sts_client = None
     _config = {}
     _current_region = None
+    _log_level = None
     _logger = logging.getLogger("DataMeshProducer")
     stream_handler = logging.StreamHandler(sys.stdout)
     _logger.addHandler(stream_handler)
@@ -52,6 +55,7 @@ class DataMeshProducer:
             self._iam_client = boto3.client('iam')
             self._sts_client = boto3.client('sts')
 
+        self._log_level = log_level
         self._logger.setLevel(log_level)
 
         self._current_account = self._sts_client.get_caller_identity()
@@ -266,6 +270,9 @@ class DataMeshProducer:
         )
         self._logger.info("Validated Producer Account Database %s" % data_mesh_database_name)
 
+        # create an API Automator to add bucket policies per table
+        automator = ApiAutomator(session=self._session, log_level=self._log_level)
+
         for table in all_tables:
             table_s3_path = table.get('StorageDescriptor').get('Location')
 
@@ -279,6 +286,13 @@ class DataMeshProducer:
                 data_mesh_database_name=data_mesh_database_name,
                 producer_account_id=current_account.get('Account'),
                 data_mesh_account_id=self._data_mesh_account_id
+            )
+
+            # add a bucket policy entry allowing the data mesh lakeformation service linked role to perform GetObject*
+            table_bucket = table_s3_path.split("/")[2]
+            automator.add_bucket_policy_entry(
+                principal_account=self._data_mesh_account_id,
+                access_path=table_bucket
             )
 
             if sync_mesh_catalog_schedule is not None:
@@ -345,7 +359,24 @@ class DataMeshProducer:
                                                     credentials=self._data_mesh_sts_session.get('Credentials'))
         tables = subscription.get(TABLE_NAME)
         ram_shares = {}
+
+        # create an API Automator to add bucket policies per table
+        automator = ApiAutomator(session=self._session, log_level=self._log_level)
+
         for t in tables:
+            # get the data location for the table
+            data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
+                                                          credentials=self._data_mesh_sts_session.get('Credentials'))
+            table = data_mesh_glue_client.get_table(DatabaseName=subscription.get(DATABASE_NAME), Name=t)
+            table_s3_path = table.get('Table').get('StorageDescriptor').get('Location')
+
+            # add a bucket policy entry allowing the consumer lakeformation service linked role to perform GetObject*
+            table_bucket = table_s3_path.split("/")[2]
+            automator.add_bucket_policy_entry(
+                principal_account=subscription.get(SUBSCRIBER_PRINCIPAL),
+                access_path=table_bucket
+            )
+
             # grant describe on the database
             utils.lf_grant_permissions(
                 data_mesh_account_id=self._data_mesh_account_id,

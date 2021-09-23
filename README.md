@@ -66,8 +66,9 @@ This functionality is presented to customers as a Python library to allow maximu
 	* `lib`
 		* `constants.py` - Contains contant values used in user or class interaction
 		* `SubscriberTracker.py` - Class that manages data product __Subscription__ status
+		* `ApiAutomator.py` - Helper class that automates API requests against AWS Accounts
 		* `utils.py` - Various utility functions shared across the codebase
-	* `resource` - Pystache templates used to generate various configurations
+	* `resource` - Pystache templates used to generate IAM policies
 * `test` - Integration tests of functionality
 
 ---

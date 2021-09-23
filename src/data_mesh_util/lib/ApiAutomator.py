@@ -1,6 +1,7 @@
 import sys
 import logging
 
+import botocore.exceptions
 import shortuuid
 
 from data_mesh_util.lib.constants import *
@@ -21,12 +22,12 @@ class ApiAutomator:
         self._session = session
         self._logger.setLevel(log_level)
 
-    def _get_client(self, client):
-        client = self._clients.get(client)
+    def _get_client(self, client_name):
+        client = self._clients.get(client_name)
 
         if client is None:
-            client = self._session.client(client)
-            self._clients[client] = client
+            client = self._session.client(client_name)
+            self._clients[client_name] = client
 
         return client
 
@@ -37,14 +38,14 @@ class ApiAutomator:
             return bucket_value
 
     def _transform_bucket_policy(self, bucket_policy: dict, principal_account: str,
-                                 bucket_name: str) -> dict:
-        use_bucket_name = self._get_bucket_name(bucket_name)
+                                 access_path: str) -> dict:
+        use_bucket_name = self._get_bucket_name(access_path)
         policy_sid = f"{BUCKET_POLICY_STATEMENT_SID}-{use_bucket_name}"
 
         # generate a new bucket policy from the template
         base_policy = json.loads(utils.generate_policy(template_file='producer_bucket_policy.pystache', config={
             'account_id': principal_account,
-            'bucket': use_bucket_name,
+            'access_path': access_path,
             'sid': policy_sid
         }))
 
@@ -58,7 +59,7 @@ class ApiAutomator:
             }
             self._logger.info(
                 f"Creation new S3 Bucket policy enabling Data Mesh LakeFormation Service Role access for {principal_account}")
-            self._logger.info(f"Creating new Bucket Policy for {bucket_name}")
+            self._logger.info(f"Creating new Bucket Policy for {access_path}")
             return generated_policy
         else:
             # we already have a bucket policy, so determine if there is already a data mesh grant created for this bucket
@@ -80,7 +81,12 @@ class ApiAutomator:
                 statement = statements[data_mesh_statement_index]
                 set_principal = f"arn:aws:iam::{principal_account}:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess"
                 if set_principal not in statement.get('Principal').get('AWS'):
-                    statement.get('Principal').get('AWS').append(set_principal)
+                    current_principals = statement.get('Principal').get('AWS')
+                    if isinstance(current_principals, list):
+                        statement.get('Principal').get('AWS').append(set_principal)
+                    else:
+                        statement.get('Principal')['AWS'] = [current_principals, set_principal]
+
                     statements[data_mesh_statement_index] = statement
                     self._logger.info(
                         f"Adding principal {principal_account} to existing Data Mesh LakeFormation Service Role statement")
@@ -91,12 +97,33 @@ class ApiAutomator:
 
             return bucket_policy
 
-    def add_bucket_policy_entry(self, principal_account: str, bucket_name: str):
+    def _get_current_bucket_policy(self, s3_client, bucket_name: str):
+        try:
+            current_policy = s3_client.get_bucket_policy(Bucket=bucket_name)
+            return current_policy
+        except botocore.exceptions.ClientError as ce:
+            if 'NoSuchBucketPolicy' in str(ce):
+                return None
+            else:
+                raise ce
+
+    def add_bucket_policy_entry(self, principal_account: str, access_path: str):
         s3_client = self._get_client('s3')
 
-        bucket_policy = s3_client.get_bucket_policy(Bucket=bucket_name)
+        bucket_name = self._get_bucket_name(access_path)
 
-        new_policy = self._transform_bucket_policy(bucket_policy=bucket_policy, principal_account=principal_account,
-                                                   bucket_name=bucket_name)
+        # get the existing policy, if there is one
+        current_policy = self._get_current_bucket_policy(s3_client, bucket_name)
 
-        s3_client.put_bucket_policy(Bucket=bucket_name, policy=new_policy)
+        bucket_policy = None
+        if current_policy is not None:
+            bucket_policy = json.loads(current_policy.get('Policy'))
+
+        # transform the existing or None policy into the desired target lakeformation policy
+        new_policy = self._transform_bucket_policy(
+            bucket_policy=bucket_policy, principal_account=principal_account,
+            access_path=access_path
+        )
+
+        # put the policy back into the bucket store
+        s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(new_policy))

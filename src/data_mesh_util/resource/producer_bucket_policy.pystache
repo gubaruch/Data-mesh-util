@@ -1,12 +1,13 @@
 {
   "Sid": "{{sid}}",
   "Action": [
-    "s3:GetObject*"
+    "s3:Get*",
+    "s3:List*"
   ],
   "Effect": "Allow",
   "Resource": [
-    "arn:aws:s3:::{{bucket}}",
-    "arn:aws:s3:::{{bucket}}/*"
+    "arn:aws:s3:::{{access_path}}",
+    "arn:aws:s3:::{{access_path}}/*"
   ],
   "Principal": {
     "AWS": [
