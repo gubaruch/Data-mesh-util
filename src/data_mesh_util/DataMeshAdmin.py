@@ -2,6 +2,7 @@ import boto3
 import os
 import sys
 import logging
+import time
 
 import botocore.session
 
@@ -107,17 +108,29 @@ class DataMeshAdmin:
 
         self._logger.info("Validated Data Mesh Manager Role %s" % data_mesh_mgr_role_arn)
 
-        # remove default IAM settings in lakeformation for the account, and setup the manager role and this caller as admins
-        response = self._lf_client.put_data_lake_settings(
-            DataLakeSettings={
-                "DataLakeAdmins": [
-                    {"DataLakePrincipalIdentifier": data_mesh_mgr_role_arn},
-                    # add the current caller identity as an admin
-                    {"DataLakePrincipalIdentifier": current_identity.get('Arn')}
-                ],
-                'CreateTableDefaultPermissions': []
-            }
-        )
+        # Horrible retry logic required to avoid boto3 exception using a role as a principal too soon after it's been created
+        retries = 0
+        while True:
+            try:
+                # remove default IAM settings in lakeformation for the account, and setup the manager role and this caller as admins
+                response = self._lf_client.put_data_lake_settings(
+                    DataLakeSettings={
+                        "DataLakeAdmins": [
+                            {"DataLakePrincipalIdentifier": data_mesh_mgr_role_arn},
+                            # add the current caller identity as an admin
+                            {"DataLakePrincipalIdentifier": current_identity.get('Arn')}
+                        ],
+                        'CreateTableDefaultPermissions': []
+                    }
+                )
+            except self._lf_client.exceptions.InvalidInputException:
+                self._logger.info(f"Error setting DataLake Principal as {data_mesh_mgr_role_arn}. Backing off....")
+                retries += 1
+                if retries > 5:
+                    raise
+                time.sleep(3)
+                continue
+            break
         self._logger.info(
             "Removed default data lake settings for Account %s. New Admins are %s and Data Mesh Manager" % (
                 current_identity.get('Account'), current_identity.get('Arn')))
@@ -146,16 +159,28 @@ class DataMeshAdmin:
 
         self._logger.info("Validated Data Mesh Producer Role %s" % producer_iam_role_arn)
 
-        # grant this role the ability to create databases and tables
-        response = self._lf_client.grant_permissions(
-            Principal={
-                'DataLakePrincipalIdentifier': producer_iam_role_arn
-            },
-            Resource={'Catalog': {}},
-            Permissions=[
-                'CREATE_DATABASE'
-            ]
-        )
+        # Horrible retry logic required to avoid boto3 exception using a role as a principal too soon after it's been created
+        retries = 0
+        while True:
+            try:
+                # grant this role the ability to create databases and tables
+                response = self._lf_client.grant_permissions(
+                    Principal={
+                        'DataLakePrincipalIdentifier': producer_iam_role_arn
+                    },
+                    Resource={'Catalog': {}},
+                    Permissions=[
+                        'CREATE_DATABASE'
+                    ]
+                )
+            except self._lf_client.exceptions.InvalidInputException:
+                self._logger.info(f"Error granting CREATE_DATABASE to {producer_iam_role_arn}. Backing off....")
+                retries += 1
+                if retries > 5:
+                    raise
+                time.sleep(3)
+                continue
+            break
         self._logger.info("Granted Data Mesh Producer CREATE_DATABASE privileges on Catalog")
 
         return producer_tuple
