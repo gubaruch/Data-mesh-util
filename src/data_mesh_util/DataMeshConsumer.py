@@ -37,10 +37,16 @@ class DataMeshConsumer:
     _logger.addHandler(logging.StreamHandler(sys.stdout))
     _subscription_tracker = None
 
-    def __init__(self, data_mesh_account_id: str, log_level: str = "INFO", use_credentials=None):
+    def __init__(self, data_mesh_account_id: str, log_level: str = "INFO", use_credentials=None,
+                 region_name: str = None):
         self._current_region = os.getenv('AWS_REGION')
-        if self._current_region is None:
-            raise Exception("Cannot create a Data Mesh Consumer without AWS_REGION environment variable")
+        if region_name is None:
+            self._current_region = os.getenv('AWS_REGION')
+
+            if self._current_region is None:
+                raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
+        else:
+            self._current_region = region_name
 
         if use_credentials is not None:
             self._session = utils.create_session(credentials=use_credentials, region=self._current_region)
