@@ -36,37 +36,41 @@ class DataMeshProducer:
     _data_mesh_account_id = None
     _data_producer_role_arn = None
     _data_mesh_sts_session = None
+    _data_mesh_boto_session = None
     _subscription_tracker = None
     _current_account = None
+    _producer_automator = None
+    _mesh_automator = None
 
-    def __init__(self, data_mesh_account_id: str, log_level: str = "INFO", use_credentials=None, region_name:str=None):
+    def __init__(self, data_mesh_account_id: str, region_name: str, log_level: str = "INFO", use_credentials=None):
         self._data_mesh_account_id = data_mesh_account_id
 
         if region_name is None:
-            self._current_region = os.getenv('AWS_REGION')
-
-            if self._current_region is None:
-                raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
+            raise Exception("Cannot initialize a Data Mesh Producer without an AWS Region")
         else:
             self._current_region = region_name
 
         if use_credentials is not None:
             self._session = utils.create_session(credentials=use_credentials, region=self._current_region)
-            self._iam_client = self._session.client('iam')
-            self._sts_client = self._session.client('sts')
         else:
-            self._session = botocore.session.get_session()
-            self._iam_client = boto3.client('iam')
-            self._sts_client = boto3.client('sts')
+            self._session = boto3.session.Session(region_name=self._current_region)
+
+        self._iam_client = self._session.client('iam')
+        self._sts_client = self._session.client('sts')
 
         self._log_level = log_level
         self._logger.setLevel(log_level)
+        self._producer_automator = ApiAutomator(session=self._session, log_level=self._log_level)
 
         self._current_account = self._sts_client.get_caller_identity()
         session_name = utils.make_iam_session_name(self._current_account)
         self._data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=data_mesh_account_id)
         self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_producer_role_arn,
                                                                    RoleSessionName=session_name)
+        self._data_mesh_boto_session = utils.create_session(credentials=self._data_mesh_sts_session.get('Credentials'),
+                                                            region=self._current_region)
+        self._mesh_automator = ApiAutomator(session=self._data_mesh_boto_session, log_level=self._log_level)
+
         self._logger.debug("Created new STS Session for Data Mesh Admin Producer")
         self._logger.debug(self._data_mesh_sts_session)
 
@@ -132,29 +136,30 @@ class DataMeshProducer:
 
         # grant access to the producer account
         perms = ['ALL']
-        created_object = utils.lf_grant_permissions(
+        created_object = self._mesh_automator.lf_grant_permissions(
             data_mesh_account_id=self._data_mesh_account_id,
-            lf_client=data_mesh_lf_client, principal=producer_account_id,
+            principal=producer_account_id,
             database_name=data_mesh_database_name, table_name=table_name,
             permissions=perms,
-            grantable_permissions=perms, logger=self._logger
+            grantable_permissions=perms
         )
 
         # grant the DataMeshAdminConsumerRole rights to describe the table, meaning any consumer can see metadata
-        utils.lf_grant_permissions(
+        self._mesh_automator.lf_grant_permissions(
             data_mesh_account_id=self._data_mesh_account_id,
-            lf_client=data_mesh_lf_client, principal=utils.get_datamesh_consumer_role_arn(
+            principal=utils.get_datamesh_consumer_role_arn(
                 account_id=self._data_mesh_account_id),
             database_name=data_mesh_database_name, table_name=table_name,
             permissions=['DESCRIBE'],
-            grantable_permissions=None, logger=self._logger
+            grantable_permissions=None
         )
 
         # in the producer account, accept the RAM share after 1 second - seems to be an async delay
         if created_object is not None:
             time.sleep(1)
-            utils.accept_pending_lf_resource_shares(ram_client=producer_ram_client, sender_account=data_mesh_account_id,
-                                                    logger=self._logger)
+            self._producer_automator.accept_pending_lf_resource_shares(
+                sender_account=data_mesh_account_id
+            )
 
             # create a resource link for the data mesh table in producer account
             link_table_name = "%s_link" % table_name
@@ -215,7 +220,7 @@ class DataMeshProducer:
             else:
                 all_tables.extend(get_table_response.get('TableList'))
 
-        self._logger.info("Loaded %s tables matching description from Glue" % len(all_tables))
+        self._logger.info(f"Loaded {len(all_tables)} tables matching {table_name_regex} from Glue")
         return all_tables
 
     def _make_database_name(self, database_name: str):
@@ -246,8 +251,7 @@ class DataMeshProducer:
         )
 
         # get or create the target database exists in the mesh account
-        utils.get_or_create_database(
-            glue_client=data_mesh_glue_client,
+        self._mesh_automator.get_or_create_database(
             database_name=data_mesh_database_name,
             database_desc="Database to contain objects from Source Database %s.%s" % (
                 current_account.get('Account'), source_database_name)
@@ -255,27 +259,23 @@ class DataMeshProducer:
         self._logger.info("Validated Data Mesh Database %s" % data_mesh_database_name)
 
         # set default permissions on db
-        utils.configure_db_permissions(glue_client=data_mesh_glue_client, database_name=data_mesh_database_name)
+        self._mesh_automator.configure_db_permissions(database_name=data_mesh_database_name)
 
         # grant the producer permissions to create tables on this database
-        utils.lf_grant_permissions(
-            data_mesh_account_id=self._data_mesh_account_id, lf_client=data_mesh_lf_client,
+        self._mesh_automator.lf_grant_permissions(
+            data_mesh_account_id=self._data_mesh_account_id,
             principal=current_account.get('Account'),
             database_name=data_mesh_database_name, permissions=['CREATE_TABLE', 'DESCRIBE'],
-            grantable_permissions=None, logger=self._logger
+            grantable_permissions=None
         )
         self._logger.info("Granted access on Database %s to Producer" % data_mesh_database_name)
 
         # get or create a data mesh shared database in the producer account
-        utils.get_or_create_database(
-            glue_client=producer_glue_client,
+        self._producer_automator.get_or_create_database(
             database_name=data_mesh_database_name,
             database_desc="Database to contain objects objects shared with the Data Mesh Account",
         )
         self._logger.info("Validated Producer Account Database %s" % data_mesh_database_name)
-
-        # create an API Automator to add bucket policies per table
-        automator = ApiAutomator(session=self._session, log_level=self._log_level)
 
         for table in all_tables:
             table_s3_path = table.get('StorageDescriptor').get('Location')
@@ -294,21 +294,19 @@ class DataMeshProducer:
 
             # add a bucket policy entry allowing the data mesh lakeformation service linked role to perform GetObject*
             table_bucket = table_s3_path.split("/")[2]
-            automator.add_bucket_policy_entry(
+            self._producer_automator.add_bucket_policy_entry(
                 principal_account=self._data_mesh_account_id,
                 access_path=table_bucket
             )
 
             if sync_mesh_catalog_schedule is not None:
-                glue_crawler = utils.create_crawler(
-                    glue_client=producer_glue_client,
+                glue_crawler = self._producer_automator.create_crawler(
                     database_name=data_mesh_database_name,
                     table_name=created_table,
                     s3_location=table_s3_path,
                     crawler_role=sync_mesh_crawler_role_arn,
                     sync_schedule=sync_mesh_catalog_schedule
                 )
-                self._logger.info("Created new Glue Crawler %s" % glue_crawler)
 
     def get_data_product(self, database_name: str, table_name_regex: str):
         # generate a new glue client for the data mesh account
@@ -364,9 +362,6 @@ class DataMeshProducer:
         tables = subscription.get(TABLE_NAME)
         ram_shares = {}
 
-        # create an API Automator to add bucket policies per table
-        automator = ApiAutomator(session=self._session, log_level=self._log_level)
-
         for t in tables:
             # get the data location for the table
             data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
@@ -376,30 +371,28 @@ class DataMeshProducer:
 
             # add a bucket policy entry allowing the consumer lakeformation service linked role to perform GetObject*
             table_bucket = table_s3_path.split("/")[2]
-            automator.add_bucket_policy_entry(
+            self._producer_automator.add_bucket_policy_entry(
                 principal_account=subscription.get(SUBSCRIBER_PRINCIPAL),
                 access_path=table_bucket
             )
 
             # grant describe on the database
-            utils.lf_grant_permissions(
+            self._mesh_automator.lf_grant_permissions(
                 data_mesh_account_id=self._data_mesh_account_id,
-                lf_client=data_mesh_lf_client,
                 principal=subscription.get(SUBSCRIBER_PRINCIPAL),
                 database_name=subscription.get(DATABASE_NAME),
                 permissions=['DESCRIBE'],
-                grantable_permissions=None, logger=self._logger
+                grantable_permissions=None
             )
 
             # grant validated permissions to object
-            utils.lf_grant_permissions(
+            self._mesh_automator.lf_grant_permissions(
                 data_mesh_account_id=self._data_mesh_account_id,
-                lf_client=data_mesh_lf_client,
                 principal=subscription.get(SUBSCRIBER_PRINCIPAL),
                 database_name=subscription.get(DATABASE_NAME),
                 table_name=t,
                 permissions=set_permissions,
-                grantable_permissions=grantable_permissions, logger=self._logger
+                grantable_permissions=grantable_permissions
             )
 
             # get the permission for the object

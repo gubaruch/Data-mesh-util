@@ -11,6 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 from data_mesh_util.lib.constants import *
 import data_mesh_util.lib.utils as utils
 from data_mesh_util.lib.SubscriberTracker import SubscriberTracker
+from data_mesh_util.lib.ApiAutomator import ApiAutomator
 
 
 class DataMeshAdmin:
@@ -34,36 +35,31 @@ class DataMeshAdmin:
     stream_handler = logging.StreamHandler(sys.stdout)
     _logger.addHandler(stream_handler)
     _subscriber_tracker = None
+    _automator = None
 
     def __init__(self, data_mesh_account_id: str, region_name: str = 'us-east-1', log_level: str = "INFO",
                  use_creds=None):
         self._data_mesh_account_id = data_mesh_account_id
         # get the region for the module
-        if 'AWS_REGION' in os.environ:
-            self._region = os.environ.get('AWS_REGION')
+        if region_name is None:
+            raise Exception("Cannot initialize a Data Mesh without an AWS Region")
         else:
-            if region_name is None:
-                raise Exception("Cannot initialize a Data Mesh without an AWS Region")
-            else:
-                self._region = region_name
+            self._region = region_name
 
         if use_creds is None:
-            self._session = botocore.session.get_session()
-            self._iam_client = boto3.client('iam', region_name=self._region)
-            self._sts_client = boto3.client('sts', region_name=self._region)
-            self._dynamo_client = boto3.client('dynamodb', region_name=self._region)
-            self._dynamo_resource = boto3.resource('dynamodb', region_name=self._region)
-            self._lf_client = boto3.client('lakeformation', region_name=self._region)
+            self._session = boto3.session.Session(region_name=self._region)
         else:
             self._session = utils.create_session(credentials=use_creds, region=self._region)
-            self._iam_client = self._session.client('iam')
-            self._sts_client = self._session.client('sts')
-            self._dynamo_client = self._session.client('dynamodb')
-            self._dynamo_resource = self._session.client('dynamodb')
-            self._lf_client = self._session.client('lakeformation')
+
+        self._iam_client = self._session.client('iam')
+        self._sts_client = self._session.client('sts')
+        self._dynamo_client = self._session.client('dynamodb')
+        self._dynamo_resource = self._session.client('dynamodb')
+        self._lf_client = self._session.client('lakeformation')
 
         self._logger.setLevel(log_level)
         self._log_level = log_level
+        self._automator = ApiAutomator(session=self._session, log_level=self._log_level)
 
     def _create_template_config(self, config: dict):
         if config is None:
@@ -94,16 +90,14 @@ class DataMeshAdmin:
         current_identity = self._sts_client.get_caller_identity()
         self._logger.debug("Running as %s" % str(current_identity))
 
-        mgr_tuple = utils.configure_iam(
-            iam_client=self._iam_client,
+        mgr_tuple = self._automator.configure_iam(
             policy_name='DataMeshManagerPolicy',
             policy_desc='IAM Policy to bootstrap the Data Mesh Admin',
             policy_template="data_mesh_setup_iam_policy.pystache",
             role_name=DATA_MESH_MANAGER_ROLENAME,
             role_desc='Role to be used for the Data Mesh Manager function',
             account_id=self._data_mesh_account_id,
-            config=self._config,
-            logger=self._logger)
+            config=self._config)
         data_mesh_mgr_role_arn = mgr_tuple[0]
 
         self._logger.info("Validated Data Mesh Manager Role %s" % data_mesh_mgr_role_arn)
@@ -145,16 +139,14 @@ class DataMeshAdmin:
         self._create_template_config(self._config)
 
         # create the policy and role to be used for data producers
-        producer_tuple = utils.configure_iam(
-            iam_client=self._iam_client,
+        producer_tuple = self._automator.configure_iam(
             policy_name='DataMeshProducerPolicy',
             policy_desc='IAM Role enabling Accounts to become Data Producers',
             policy_template="producer_policy.pystache",
             role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME,
             role_desc='Role to be used for all Data Mesh Producer Accounts',
             account_id=self._data_mesh_account_id,
-            config=self._config,
-            logger=self._logger)
+            config=self._config)
         producer_iam_role_arn = producer_tuple[0]
 
         self._logger.info("Validated Data Mesh Producer Role %s" % producer_iam_role_arn)
@@ -193,16 +185,14 @@ class DataMeshAdmin:
         '''
         self._create_template_config(self._config)
 
-        return utils.configure_iam(
-            iam_client=self._iam_client,
+        return self._automator.configure_iam(
             policy_name='DataMeshConsumerPolicy',
             policy_desc='IAM Role enabling Accounts to become Data Consumers',
             policy_template="consumer_policy.pystache",
             role_name=DATA_MESH_ADMIN_CONSUMER_ROLENAME,
             role_desc='Role to be used for all Data Mesh Consumer Accounts',
             account_id=self._data_mesh_account_id,
-            config=self._config,
-            logger=self._logger)
+            config=self._config)
 
     def _api_tuple(self, item_tuple: tuple):
         return {
@@ -251,17 +241,39 @@ class DataMeshAdmin:
         '''
         return self._initialize_account_as(type=PRODUCER)
 
-    def enable_account_as_producer(self, account_id: str):
+    def _enable_account_as(self, account_id: str, trust_role: str, update_role: str):
         '''
-        Enables a remote account to act as a data producer by granting them access to the DataMeshAdminProducer Role
+        Enables a remote role to act as a data consumer by granting them access to the DataMeshAdminConsumer Role
         :return:
         '''
         utils.validate_correct_account(self._session.get_credentials(), self._data_mesh_account_id)
 
         # create trust relationships for the AdminProducer roles
-        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
-                                    role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME)
-        self._logger.info("Enabled Account %s to assume %s" % (account_id, DATA_MESH_ADMIN_PRODUCER_ROLENAME))
+        self._automator.add_aws_trust_to_role(account_id_to_trust=account_id,
+                                              trust_role_name=trust_role,
+                                              update_role_name=update_role)
+
+    def enable_account_as_producer(self, account_id: str):
+        '''
+        Enables a remote role to act as a data producer by granting them access to the DataMeshAdminProducer Role
+        :return:
+        '''
+        self._enable_account_as(
+            account_id=account_id,
+            trust_role=DATA_MESH_PRODUCER_ROLENAME,
+            update_role=DATA_MESH_ADMIN_PRODUCER_ROLENAME
+        )
+
+    def enable_account_as_consumer(self, account_id: str):
+        '''
+        Enables a remote account to act as a data consumer by granting them access to the DataMeshAdminConsumer Role
+        :return:
+        '''
+        self._enable_account_as(
+            account_id=account_id,
+            trust_role=DATA_MESH_CONSUMER_ROLENAME,
+            update_role=DATA_MESH_ADMIN_CONSUMER_ROLENAME
+        )
 
     def _initialize_account_as(self, type: str):
         '''
@@ -299,15 +311,13 @@ class DataMeshAdmin:
         group_name = f"{local_role_name}Group"
 
         # setup the consumer IAM role, user, and group
-        iam_details = utils.configure_iam(
-            iam_client=self._iam_client,
+        iam_details = self._automator.configure_iam(
             policy_name=policy_name,
             policy_desc=f'IAM Policy enabling Accounts to Assume the {local_role_name} Role',
             policy_template=policy_template,
             role_name=local_role_name,
             role_desc=f'{local_role_name} facilitating principals to act as {type}',
-            account_id=target_account,
-            logger=self._logger
+            account_id=target_account
         )
 
         self._logger.info(f"Role {iam_details[0]}")
@@ -325,19 +335,17 @@ class DataMeshAdmin:
         # allow the local group to assume the remote consumer policy
         policy_name = f"Assume{remote_role_name}"
 
-        policy_arn = utils.create_assume_role_policy(
-            iam_client=self._iam_client,
+        policy_arn = self._automator.create_assume_role_policy(
             account_id=target_account,
             policy_name=policy_name,
-            role_arn=remote_role_arn,
-            logger=self._logger
+            role_arn=remote_role_arn
         )
         self._logger.info(f"Validated Policy {policy_name} as {policy_arn}")
         self._iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
         self._logger.info(f"Bound {policy_arn} to Group {group_name}")
 
         # make the iam role a lakeformation admin
-        utils.add_datalake_admin(lf_client=self._lf_client, principal=iam_details[0])
+        self._automator.add_datalake_admin(principal=iam_details[0])
 
         # create a service linked role for lakeformation
         try:
@@ -345,6 +353,11 @@ class DataMeshAdmin:
                 AWSServiceName='lakeformation.amazonaws.com'
             )
             self._logger.info("Created new Service Linked Role for AWS LakeFormation")
+        except self._iam_client.exceptions.InvalidInputException as iie:
+            if "has been taken in this account, please try a different suffix" in str(iie):
+                pass
+            else:
+                raise iie
         except self._iam_client.exceptions.AlreadyExistsException:
             pass
 
@@ -358,15 +371,3 @@ class DataMeshAdmin:
         :return:
         '''
         return self._initialize_account_as(type=CONSUMER)
-
-    def enable_account_as_consumer(self, account_id: str):
-        '''
-        Enables a remote account to act as a data consumer by granting them access to the DataMeshAdminConsumer Role
-        :return:
-        '''
-        utils.validate_correct_account(self._session.get_credentials(), self._data_mesh_account_id)
-
-        # create trust relationships for the AdminProducer roles
-        utils.add_aws_trust_to_role(iam_client=self._iam_client, account_id=account_id,
-                                    role_name=DATA_MESH_ADMIN_CONSUMER_ROLENAME)
-        self._logger.info("Enabled Account %s to assume %s" % (account_id, DATA_MESH_ADMIN_CONSUMER_ROLENAME))

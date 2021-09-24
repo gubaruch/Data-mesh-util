@@ -12,8 +12,7 @@ import logging
 sys.path.append(os.path.join(os.path.dirname(__file__), "resource"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 
-from data_mesh_util.lib.constants import *
-import data_mesh_util.lib.utils as utils
+from data_mesh_util.lib.ApiAutomator import ApiAutomator
 from data_mesh_util.lib.SubscriberTracker import *
 
 
@@ -36,33 +35,28 @@ class DataMeshConsumer:
     _logger = logging.getLogger("DataMeshConsumer")
     _logger.addHandler(logging.StreamHandler(sys.stdout))
     _subscription_tracker = None
+    _consumer_automator = None
 
-    def __init__(self, data_mesh_account_id: str, log_level: str = "INFO", use_credentials=None,
-                 region_name: str = None):
-        self._current_region = os.getenv('AWS_REGION')
+    def __init__(self, data_mesh_account_id: str, region_name: str, log_level: str = "INFO", use_credentials=None):
         if region_name is None:
-            self._current_region = os.getenv('AWS_REGION')
-
-            if self._current_region is None:
-                raise Exception("Cannot create a Data Mesh Producer without AWS_REGION environment variable")
+            raise Exception("Cannot initialize a Data Mesh Consumer without an AWS Region")
         else:
             self._current_region = region_name
 
         if use_credentials is not None:
             self._session = utils.create_session(credentials=use_credentials, region=self._current_region)
-            self._iam_client = self._session.client('iam')
-            self._ram_client = self._session.client('ram')
-            self._sts_client = self._session.client('sts')
-            self._glue_client = self._session.client('glue')
         else:
-            self._session = botocore.session.get_session()
-            self._iam_client = boto3.client('iam')
-            self._ram_client = boto3.client('ram')
-            self._sts_client = boto3.client('sts')
-            self._glue_client = boto3.client('glue')
+            self._session = boto3.session.Session(region_name=self._current_region)
+
+        self._iam_client = self._session.client('iam')
+        self._ram_client = self._session.client('ram')
+        self._sts_client = self._session.client('sts')
+        self._glue_client = self._session.client('glue')
 
         self._log_level = log_level
         self._logger.setLevel(log_level)
+
+        self._consumer_automator = ApiAutomator(session=self._session, log_level=self._log_level)
 
         # create the subscription tracker
         self._current_account = self._sts_client.get_caller_identity()
@@ -118,15 +112,13 @@ class DataMeshConsumer:
         subscription = self._subscription_tracker.get_subscription(subscription_id=subscription_id)
 
         # create a shared database reference
-        utils.get_or_create_database(
-            glue_client=self._glue_client,
+        self._consumer_automator.get_or_create_database(
             database_name=subscription.get(DATABASE_NAME),
             database_desc=f"Database to contain objects from Producer Database {subscription.get(OWNER_PRINCIPAL)}.{subscription.get(DATABASE_NAME)}",
             source_account=self._data_mesh_account_id
         )
 
-        utils.accept_pending_lf_resource_shares(
-            logger=self._logger, ram_client=self._ram_client,
+        self._consumer_automator.accept_pending_lf_resource_shares(
             sender_account=self._data_mesh_account_id
         )
 

@@ -5,6 +5,7 @@ import sys
 import os
 import warnings
 import boto3
+import test_utils as test_utils
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src/resource"))
@@ -18,28 +19,49 @@ from data_mesh_util.lib.SubscriberTracker import *
 
 class DataMeshIntegrationTests(unittest.TestCase):
     _log_level = "DEBUG"
-    _current_region = os.getenv('AWS_REGION')
 
     # load credentials
-    _client, _account_ids, _creds = utils.load_client_info_from_file(from_path=os.getenv('CredentialsFile'),
-                                                                     region_name=os.getenv('AWS_REGION'))
+    _region, _client, _account_ids, _creds = test_utils.load_client_info_from_file(
+        from_path=os.getenv('CredentialsFile')
+    )
 
     # create a subscriber tracker that is bound into the Mesh account, that will help us to inspect what's happening behind the scenes
     _subscription_tracker = SubscriberTracker(credentials=boto3.session.Session().get_credentials(),
                                               data_mesh_account_id=_account_ids.get('Mesh'),
-                                              region_name=_current_region,
+                                              region_name=_region,
                                               log_level=_log_level)
 
-    # create a data producer class in the Producer Account
-    _producer = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get(MESH),
-                                     use_credentials=_creds.get(PRODUCER))
-
-    # create a data consumer class in the Consumer Account
-    _consumer = dmc.DataMeshConsumer(data_mesh_account_id=_account_ids.get(MESH),
-                                     use_credentials=_creds.get(CONSUMER))
+    def get_role_credentials(self, input_creds, assume_role_name: str):
+        sts_client = utils.generate_client('sts', region='us-east-1', credentials=input_creds)
+        current_account = sts_client.get_caller_identity()
+        session_name = utils.make_iam_session_name(current_account)
+        assumed_role = sts_client.assume_role(
+            RoleArn=utils.get_role_arn(
+                account_id=current_account.get('Account'), role_name=assume_role_name),
+            RoleSessionName=session_name
+        )
+        return assumed_role.get('Credentials')
 
     def setUp(self) -> None:
         warnings.filterwarnings("ignore", category=ResourceWarning)
+
+        # create a data producer class in the Producer Account
+        producer_credentials = self.get_role_credentials(
+            input_creds=self._creds.get(PRODUCER),
+            assume_role_name=DATA_MESH_PRODUCER_ROLENAME
+        )
+        self._producer = dmp.DataMeshProducer(data_mesh_account_id=self._account_ids.get(MESH),
+                                              region_name=self._region,
+                                              use_credentials=producer_credentials)
+
+        # create a data consumer class in the Consumer Account
+        consumer_credentials = self.get_role_credentials(
+            input_creds=self._creds.get(CONSUMER),
+            assume_role_name=DATA_MESH_CONSUMER_ROLENAME
+        )
+        self._consumer = dmc.DataMeshConsumer(data_mesh_account_id=self._account_ids.get(MESH),
+                                              region_name=self._region,
+                                              use_credentials=consumer_credentials)
 
     def integration_test(self):
         db = 'tpcds'
