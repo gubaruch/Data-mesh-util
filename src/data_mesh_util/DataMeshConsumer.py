@@ -124,15 +124,16 @@ class DataMeshConsumer:
             sender_account=self._data_mesh_account_id
         )
 
-    def list_product_access(self, principal_id: str):
+    def list_product_access(self):
         '''
         Lists active and pending product access grants.
         :return:
         '''
-        pass
+        me = self._sts_client.get_caller_identity().get('Account')
+        return self._subscription_tracker.list_subscriptions(owner_id=me)
 
     def get_subscription(self, request_id: str):
         return self._subscription_tracker.get_subscription(subscription_id=request_id)
 
     def delete_subscription(self, subscription_id: str, reason: str):
-        pass
+        return self._subscription_tracker.delete_subscription(subscription_id=subscription_id, reason=reason)

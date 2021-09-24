@@ -330,7 +330,7 @@ class DataMeshProducer:
         with close_access_request()
         :return:
         '''
-        me = current_account = self._sts_client.get_caller_identity().get('Account')
+        me = self._sts_client.get_caller_identity().get('Account')
         return self._subscription_tracker.list_subscriptions(owner_id=me, request_status=STATUS_PENDING)
 
     def approve_access_request(self, request_id: str,
