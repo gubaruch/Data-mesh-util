@@ -43,9 +43,10 @@ class ApiAutomator:
         policy_sid = f"{BUCKET_POLICY_STATEMENT_SID}-{use_bucket_name}"
 
         # generate a new bucket policy from the template
+        s3_path = "/".join(access_path.split("/")[2:])
         base_policy = json.loads(utils.generate_policy(template_file='producer_bucket_policy.pystache', config={
             'account_id': principal_account,
-            'access_path': access_path,
+            'access_path': s3_path,
             'sid': policy_sid
         }))
 

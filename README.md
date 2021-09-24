@@ -26,13 +26,15 @@ Identity within the mesh Account. Once completed, end users can perform the foll
 
 ### Data Mesh Tasks
 
-* __Create Data Product__ (__Producer__) - Exposes a Lake Formation Database and/or one-or-more Tables as __Data Products__
-* __Subscribe to Data Product__ (__Consumer__) - Creates a record of a request for specific permissions on a __Data Product__ for a __Consumer__
-* __Approve Subscription Request__ (__Producer__) - Allows for a __Producer__ to approve a set of permissions against a __Data Product__
-* __Delete Subscription__ (__Any__) - Allows a __Consumer__ or __Producer__ to delete a __Subscription__ request. Can be used at any time. Please note the __Subscription__ is not deleted, but instead is archived.
-* __Modify Subscription__ (__Producer__) - Allows a __Producer__ to expand or reduce the scope of a __Consumer's__ access to a __Data Product__
-* __List Subscriptions__ (__Any__) - Lists all __Subscriptions__ and their associated status for any number of filters
-* __Get Subscription__ (__Any__) - Retrieves a single __Subscription__
+| Producer | Data Mesh Administrator | Consumer |
+|----------|-----------|----------|
+|* __Create Data Product__ - Exposes a Lake Formation Database and/or one-or-more Tables as __Data Products__ </br>* __Approve/Deny Subscription Request__ - Allows for a __Producer__ to approve a set of permissions against a Data Product  </br>* __Modify Subscription__ - Allows a Producer to expand or reduce the scope of a Consumer's access to a Data Product  | * __Initialize Mesh Account__ - Sets up an AWS Account to act as the central Data Mesh governance account</br>* __Initialize Producer Account__ - Sets up an AWS Account to act as a Data Producer </br>* __Initialize Consumer Account__ - Sets up an AWS Account to act as a Data Consumer </br>* __Enable Account as Producer__ - Identifies an account as a Producer within the Data Mesh Account </br>* __Enable Account as Consumer__  - Identifies an account as a Consumer within the Data Mesh Account| * __Request Access to Product__ - Creates a request for access to a Data Product including requested grants </br>* __Finalize Subscription__ - Once a subscription has been granted for a data product, imports the metadata into the Consumer Account </br>* __List Product Access__ - Lists which subscriptions are available to the consumer including the status of the request |
+
+The following general functionality avialable to any Data Mesh entity is provided:
+
+* __Delete Subscription__ - Allows a Consumer or Producer to delete a Subscription request. Can be used at any time. Please note the Subscription is not deleted, but instead is archived.
+* __List Subscriptions__ - Lists all Subscriptions and their associated status for any number of filters 
+* __Get Subscription__ - Retrieves a single Subscription
 
 ### Overall System Architecture
 
@@ -52,7 +54,7 @@ You can then see that there is a Producer Account 111111111111 who has been able
 
 Similarly, we have a consumer Account 999999999999. This Account also includes IAM objects to enable data mesh access, including the `DataMeshConsumer` IAM Role, and associated IAM users and groups. Only the `DataMeshConsumer` role may assume the `DataMeshAdminConsumer` role in the data mesh Account.
 
-All information around current or pending subscriptions is stored in DynamoDB, in table `AwsDataMeshSubscriptions`. This table is secured for only those operations which __Producers__ or __Consumer__ roles are allowed to execute, and stores the overall lifecycle for __Subscriptions__.
+All information around current or pending subscriptions is stored in DynamoDB, in table `AwsDataMeshSubscriptions`. This table is secured for only those operations which Producers or Consumer roles are allowed to execute, and stores the overall lifecycle for Subscriptions.
 
 ### Library Structure
 
@@ -60,12 +62,12 @@ This functionality is presented to customers as a Python library to allow maximu
 
 * `src`
 	* `data_mesh_util`
-		* [`DataMeshAdmin.py`](doc/DataMeshAdmin.md) - Includes functionality to be performed by the Administrative function, and is generally only used once to setup the Mesh architecture
-		* [`DataMeshProducer.py`](doc/DataMeshProducer.md) - Includes functionality performed by the __Producer__ persona, to create an manage __Data Products__
-		* [`DataMeshConsumer.py`](doc/DataMeshConsumer.md) - Includes functionality allowing principals to subscribe to __Data Products__
+		* [`DataMeshAdmin.py`](doc/DataMeshAdmin.md) - Includes functionality to be performed by the Administrative function for each account type
+		* [`DataMeshProducer.py`](doc/DataMeshProducer.md) - Includes functionality performed by the Producer persona, to create an manage Data Products and manage subscriptions for their products
+		* [`DataMeshConsumer.py`](doc/DataMeshConsumer.md) - Includes functionality allowing principals to subscribe to Data Products
 	* `lib`
 		* `constants.py` - Contains contant values used in user or class interaction
-		* `SubscriberTracker.py` - Class that manages data product __Subscription__ status
+		* `SubscriberTracker.py` - Class that manages data product Subscription status
 		* `ApiAutomator.py` - Helper class that automates API requests against AWS Accounts
 		* `utils.py` - Various utility functions shared across the codebase
 	* `resource` - Pystache templates used to generate IAM policies

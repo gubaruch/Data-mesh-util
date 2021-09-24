@@ -11,7 +11,7 @@
         },
         "Action": [
           "s3:Get*",
-    "s3:List*"
+          "s3:List*"
         ],
         "Resource": [
           "arn:aws:s3:::org-1-data",
