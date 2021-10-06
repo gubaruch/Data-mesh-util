@@ -1,5 +1,6 @@
 import sys
 import logging
+import time
 
 import boto3
 import botocore.exceptions
@@ -58,6 +59,7 @@ class ApiAutomator:
             trusted_entities.append(trust_role_name)
             policy_doc.get('Statement')[0].get('Principal')['AWS'] = trusted_entities
 
+        print(policy_doc)
         iam_client.update_assume_role_policy(RoleName=update_role_name, PolicyDocument=json.dumps(policy_doc))
 
         self._logger.info("Enabled Account %s to assume %s" % (account_id_to_trust, update_role_name))
@@ -363,11 +365,23 @@ class ApiAutomator:
         admins.append({
             'DataLakePrincipalIdentifier': principal
         })
-        lf_client.put_data_lake_settings(
-            DataLakeSettings={
-                'DataLakeAdmins': admins
-            }
-        )
+        # Horrible retry logic required to avoid boto3 exception using a role as a principal too soon after it's been created
+        retries = 0
+        while True:
+            try:
+                lf_client.put_data_lake_settings(
+                    DataLakeSettings={
+                        'DataLakeAdmins': admins
+                    }
+                )
+            except lf_client.exceptions.InvalidInputException:
+                self._logger.info(f"Error setting DataLakeAdmins as {admins}. Backing off....")
+                retries += 1
+                if retries > 5:
+                    raise
+                time.sleep(3)
+                continue
+            break
 
     def _transform_bucket_policy(self, bucket_policy: dict, principal_account: str,
                                  access_path: str) -> dict:
