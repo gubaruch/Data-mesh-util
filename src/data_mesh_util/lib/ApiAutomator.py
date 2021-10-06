@@ -130,29 +130,37 @@ class ApiAutomator:
 
         role_arn = None
 
-        try:
-            # now create the IAM Role with a trust policy to the indicated principal and the root user
-            aws_principals = [user_arn, ("arn:aws:iam::%s:root" % account_id)]
-            role_response = iam_client.create_role(
-                Path=DATA_MESH_IAM_PATH,
-                RoleName=role_name,
-                AssumeRolePolicyDocument=json.dumps(
-                    utils.create_assume_role_doc(aws_principals=aws_principals,
-                                                 additional_principals=additional_assuming_principals)),
-                Description=role_desc,
-                Tags=DEFAULT_TAGS
-            )
+        retries = 0
+        while True:
+            try:
+                # now create the IAM Role with a trust policy to the indicated principal and the root user
+                aws_principals = [user_arn, ("arn:aws:iam::%s:root" % account_id)]
+                role_response = iam_client.create_role(
+                    Path=DATA_MESH_IAM_PATH,
+                    RoleName=role_name,
+                    AssumeRolePolicyDocument=json.dumps(
+                        utils.create_assume_role_doc(aws_principals=aws_principals,
+                                                     additional_principals=additional_assuming_principals)),
+                    Description=role_desc,
+                    Tags=DEFAULT_TAGS
+                )
 
-            role_arn = role_response.get('Role').get('Arn')
+                role_arn = role_response.get('Role').get('Arn')
 
-            # wait for role active
-            waiter = iam_client.get_waiter('role_exists')
-            waiter.wait(RoleName=role_name)
-        except iam_client.exceptions.EntityAlreadyExistsException:
-            role_arn = iam_client.get_role(RoleName=role_name).get(
-                'Role').get('Arn')
-        except iam_client.exceptions.MalformedPolicyDocumentException:
-            self._logger.info(f"Error creating role {role_name}. Backing off....")
+                # wait for role active
+                waiter = iam_client.get_waiter('role_exists')
+                waiter.wait(RoleName=role_name)
+            except iam_client.exceptions.EntityAlreadyExistsException:
+                role_arn = iam_client.get_role(RoleName=role_name).get(
+                    'Role').get('Arn')
+            except iam_client.exceptions.MalformedPolicyDocumentException:
+                self._logger.info(f"Error creating role {role_name}. Backing off....")
+                retries += 1
+                if retries > 5:
+                    raise
+                time.sleep(3)
+                continue
+            break
 
         self._logger.info(f"Validated Role {role_name} as {role_arn}")
 
