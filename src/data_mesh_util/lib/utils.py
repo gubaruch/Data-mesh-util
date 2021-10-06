@@ -27,10 +27,10 @@ def validate_correct_account(credentials, account_id: str, should_match: bool = 
         'Account')
     if should_match is False and caller_account == account_id:
         raise Exception(
-            f"Function should run within the Data Mesh Account ({account_id}) and not {caller_account}")
+            f"Function should not run within the Data Mesh Account ({account_id}) ")
     if should_match is True and caller_account != account_id:
         raise Exception(
-            f"Function should not run within the Data Mesh Account ({account_id}) ")
+            f"Function should run within the Data Mesh Account ({account_id}) and not {caller_account}")
 
 
 def generate_policy(template_file: str, config: dict):
