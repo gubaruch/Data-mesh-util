@@ -63,7 +63,7 @@ This functionality is presented to customers as a Python library to allow maximu
 * `src`
 	* `data_mesh_util`
 		* [`DataMeshAdmin.py`](doc/DataMeshAdmin.md) - Includes functionality to be performed by the Administrative function for each account type
-		* [`DataMeshProducer.py`](doc/DataMeshProducer.md) - Includes functionality performed by the Producer persona, to create an manage Data Products and manage subscriptions for their products
+		* [`DataMeshProducer.py`](doc/DataMeshProducer.md) - Includes functionality performed by the Producer persona, to create and manage Data Products and manage subscriptions for their products
 		* [`DataMeshConsumer.py`](doc/DataMeshConsumer.md) - Includes functionality allowing principals to subscribe to Data Products
 	* `lib`
 		* `constants.py` - Contains contant values used in user or class interaction
