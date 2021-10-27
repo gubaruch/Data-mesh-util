@@ -131,7 +131,7 @@ class DataMeshAdmin:
 
         return mgr_tuple
 
-    def _create_producer_role(self):
+    def _create_producer_role(self, account_id: str):
         '''
         Private method to create objects needed for a Producer account to connect to the Data Mesh and create data products
         :return:
@@ -140,44 +140,33 @@ class DataMeshAdmin:
 
         # create the policy and role to be used for data producers
         producer_tuple = self._automator.configure_iam(
-            policy_name='DataMeshProducerPolicy',
-            policy_desc='IAM Role enabling Accounts to become Data Producers',
+            policy_name=f'DataMeshProducerPolicy-{account_id}',
+            policy_desc=f'IAM Role enabling Account {account_id} to become a Data Producer',
             policy_template="producer_policy.pystache",
-            role_name=DATA_MESH_ADMIN_PRODUCER_ROLENAME,
-            role_desc='Role to be used for all Data Mesh Producer Accounts',
+            role_name=utils.get_central_role_name(account_id=account_id, type=PRODUCER),
+            role_desc=f'Role to be used for Data Mesh Producer {account_id}',
             account_id=self._data_mesh_account_id,
             config=self._config)
         producer_iam_role_arn = producer_tuple[0]
 
         self._logger.info("Validated Data Mesh Producer Role %s" % producer_iam_role_arn)
 
-        # Horrible retry logic required to avoid boto3 exception using a role as a principal too soon after it's been created
-        retries = 0
-        while True:
-            try:
-                # grant this role the ability to create databases and tables
-                response = self._lf_client.grant_permissions(
-                    Principal={
-                        'DataLakePrincipalIdentifier': producer_iam_role_arn
-                    },
-                    Resource={'Catalog': {}},
-                    Permissions=[
-                        'CREATE_DATABASE'
-                    ]
-                )
-            except self._lf_client.exceptions.InvalidInputException:
-                self._logger.info(f"Error granting CREATE_DATABASE to {producer_iam_role_arn}. Backing off....")
-                retries += 1
-                if retries > 5:
-                    raise
-                time.sleep(3)
-                continue
-            break
+        # grant this role the ability to create databases and tables
+        response = self._lf_client.grant_permissions(
+            Principal={
+                'DataLakePrincipalIdentifier': producer_iam_role_arn
+            },
+            Resource={'Catalog': {}},
+            Permissions=[
+                'CREATE_DATABASE'
+            ]
+        )
+
         self._logger.info("Granted Data Mesh Producer CREATE_DATABASE privileges on Catalog")
 
         return producer_tuple
 
-    def _create_consumer_role(self):
+    def _create_consumer_role(self, account_id: str):
         '''
         Private method to create objects needed for a Consumer account to connect to the Data Mesh and mirror data
         products into their account
@@ -186,11 +175,11 @@ class DataMeshAdmin:
         self._create_template_config(self._config)
 
         return self._automator.configure_iam(
-            policy_name='DataMeshConsumerPolicy',
-            policy_desc='IAM Role enabling Accounts to become Data Consumers',
+            policy_name=f'DataMeshConsumerPolicy-{account_id}',
+            policy_desc=f'IAM Role enabling Account {account_id} to become Data Consumers',
             policy_template="consumer_policy.pystache",
-            role_name=DATA_MESH_ADMIN_CONSUMER_ROLENAME,
-            role_desc='Role to be used for all Data Mesh Consumer Accounts',
+            role_name=utils.get_central_role_name(account_id=account_id, type=CONSUMER),
+            role_desc=f'Role to be used for Data Mesh Consumer {account_id}',
             account_id=self._data_mesh_account_id,
             config=self._config)
 
@@ -218,20 +207,11 @@ class DataMeshAdmin:
         # create a new IAM role in the Data Mesh Account to be used for future grants
         mgr_tuple = self._create_data_mesh_manager_role()
 
-        # create the producer role
-        producer_tuple = self._create_producer_role()
-
-        # create the consumer role
-        consumer_tuple = self._create_consumer_role()
-
         return {
             "Manager": self._api_tuple(mgr_tuple),
-            "ProducerAdmin": self._api_tuple(producer_tuple),
-            "ConsumerAdmin": self._api_tuple(consumer_tuple),
             "SubscriptionTracker": self._subscription_tracker.get_endpoints()
         }
 
-    # TODO move method to CloudFormation based provisioning
     def initialize_producer_account(self):
         '''
         Sets up an AWS Account to act as a Data Provider into the central Data Mesh Account. This method should be invoked
@@ -241,7 +221,7 @@ class DataMeshAdmin:
         '''
         return self._initialize_account_as(type=PRODUCER)
 
-    def _enable_account_as(self, account_id: str, trust_role: str, update_role: str):
+    def _add_trust_relationship(self, account_id: str, trust_role: str, update_role: str):
         '''
         Enables a remote role to act as a data consumer by granting them access to the DataMeshAdminConsumer Role
         :return:
@@ -258,10 +238,12 @@ class DataMeshAdmin:
         Enables a remote role to act as a data producer by granting them access to the DataMeshAdminProducer Role
         :return:
         '''
-        self._enable_account_as(
+        self._create_producer_role(account_id=account_id)
+
+        self._add_trust_relationship(
             account_id=account_id,
             trust_role=DATA_MESH_PRODUCER_ROLENAME,
-            update_role=DATA_MESH_ADMIN_PRODUCER_ROLENAME
+            update_role=utils.get_central_role_name(account_id=account_id, type=PRODUCER)
         )
 
     def enable_account_as_consumer(self, account_id: str):
@@ -269,17 +251,19 @@ class DataMeshAdmin:
         Enables a remote account to act as a data consumer by granting them access to the DataMeshAdminConsumer Role
         :return:
         '''
-        self._enable_account_as(
+        self._create_consumer_role(account_id=account_id)
+
+        self._add_trust_relationship(
             account_id=account_id,
             trust_role=DATA_MESH_CONSUMER_ROLENAME,
-            update_role=DATA_MESH_ADMIN_CONSUMER_ROLENAME
+            update_role=utils.get_central_role_name(account_id=account_id, type=CONSUMER)
         )
 
     def _initialize_account_as(self, type: str):
         '''
-        Sets up an AWS Account to act as a Data Consumer from the central Data Mesh Account. This method should be invoked
-        by an Administrator of the Consumer Account. Creates IAM Role & Policy which allows an end user to assume the
-        DataMeshAdminConsumer Role and subscribe to products.
+        Sets up an AWS Account to act as a Data Producer or Consumer from the central Data Mesh Account. This method should
+        be invoked by an Administrator of the Producer or Consumer Account. Creates IAM Role & Policy which allows a remote account to
+        access the central IAM Roles and produce or subscribe to products.
         :return:
         '''
         utils.validate_correct_account(self._session.get_credentials(), self._data_mesh_account_id,
@@ -291,17 +275,18 @@ class DataMeshAdmin:
         remote_role_name = None
         policy_name = None
         policy_template = None
+
         if type == CONSUMER:
             self._data_consumer_account_id = source_account
             local_role_name = DATA_MESH_CONSUMER_ROLENAME
-            remote_role_name = DATA_MESH_ADMIN_CONSUMER_ROLENAME
+            remote_role_name = f"{DATA_MESH_ADMIN_CONSUMER_ROLENAME}-{source_account}"
             policy_name = CONSUMER_POLICY_NAME
             policy_template = "consumer_policy.pystache"
             target_account = self._data_consumer_account_id
         else:
             self._data_producer_account_id = source_account
             local_role_name = DATA_MESH_PRODUCER_ROLENAME
-            remote_role_name = DATA_MESH_ADMIN_PRODUCER_ROLENAME
+            remote_role_name = f"{DATA_MESH_ADMIN_PRODUCER_ROLENAME}-{source_account}"
             policy_name = PRODUCER_POLICY_NAME
             policy_template = "producer_access_catalog.pystache"
             target_account = self._data_producer_account_id

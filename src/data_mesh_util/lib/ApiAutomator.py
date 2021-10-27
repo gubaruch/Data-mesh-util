@@ -149,8 +149,6 @@ class ApiAutomator:
         except iam_client.exceptions.EntityAlreadyExistsException:
             role_arn = iam_client.get_role(RoleName=role_name).get(
                 'Role').get('Arn')
-        except iam_client.exceptions.MalformedPolicyDocumentException:
-            self._logger.info(f"Error creating role {role_name}. Backing off....")
 
         self._logger.info(f"Validated Role {role_name} as {role_arn}")
 

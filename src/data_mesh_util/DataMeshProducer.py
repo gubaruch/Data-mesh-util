@@ -280,6 +280,8 @@ class DataMeshProducer:
         for table in all_tables:
             table_s3_path = table.get('StorageDescriptor').get('Location')
 
+            # create a data lake location for the s3 path
+
             # create a mesh table for the local copy
             created_table = self._create_mesh_table(
                 table_def=table,

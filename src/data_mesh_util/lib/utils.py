@@ -22,6 +22,13 @@ def make_iam_session_name(current_account):
         return val[:n]
 
 
+def get_central_role_name(account_id: str, type: str) -> str:
+    if type == PRODUCER:
+        return f"{DATA_MESH_ADMIN_PRODUCER_ROLENAME}-{account_id}"
+    else:
+        return f"{DATA_MESH_ADMIN_CONSUMER_ROLENAME}-{account_id}"
+
+
 def validate_correct_account(credentials, account_id: str, should_match: bool = True):
     caller_account = generate_client(service='sts', region=None, credentials=credentials).get_caller_identity().get(
         'Account')
