@@ -30,19 +30,25 @@ class DataMeshProducerAccountTests(unittest.TestCase):
     _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
         from_path=os.getenv('CredentialsFile'))
 
-    # bind the test class into the data mesh account
-    _sts_session = test_utils.assume_source_role(_clients.get(PRODUCER), _account_ids.get(PRODUCER), PRODUCER)
-    _data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=_account_ids.get(MESH))
+    # bind the test class into the producer account
+    _sts_session = test_utils.assume_source_role(sts_client=_clients.get(PRODUCER),
+                                                 account_id=_account_ids.get(PRODUCER),
+                                                 type=PRODUCER)
     _sts_client = utils.generate_client('sts', _region, _sts_session.get('Credentials'))
+
+    # now assume the producer role in the data mesh
+    _data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=_account_ids.get(MESH))
     _session_name = utils.make_iam_session_name(_sts_client.get_caller_identity())
     _data_mesh_sts_session = _sts_client.assume_role(RoleArn=_data_producer_role_arn,
                                                      RoleSessionName=_session_name)
-
-    _mgr = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get(MESH), log_level=logging.DEBUG)
-    _current_region = os.getenv('AWS_REGION')
+    producer_mesh_credentials = _data_mesh_sts_session.get('Credentials')
+    _mgr = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get(MESH),
+                                log_level=logging.DEBUG,
+                                region_name=_region,
+                                use_credentials=producer_mesh_credentials)
     _subscription_tracker = SubscriberTracker(data_mesh_account_id=_account_ids.get(MESH),
-                                              credentials=_data_mesh_sts_session.get('Credentials'),
-                                              region_name=_current_region,
+                                              credentials=producer_mesh_credentials,
+                                              region_name=_region,
                                               log_level=logging.DEBUG)
 
     def setUp(self) -> None:

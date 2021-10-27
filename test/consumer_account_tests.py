@@ -29,7 +29,10 @@ class ConsumerAccountTests(unittest.TestCase):
     _logger = logging.getLogger("DataMeshConsumer")
     _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
         from_path=os.getenv('CredentialsFile'))
-    _mgr = dmc.DataMeshConsumer(data_mesh_account_id=_account_ids.get(MESH), log_level=logging.DEBUG)
+    _mgr = dmc.DataMeshConsumer(data_mesh_account_id=_account_ids.get(MESH),
+                                log_level=logging.DEBUG,
+                                region_name=_region,
+                                use_credentials=_creds.get(CONSUMER))
     DATABASE_NAME = "tpcds-%s" % _account_ids.get(PRODUCER)
 
     def setUp(self) -> None:
