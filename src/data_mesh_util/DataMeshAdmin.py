@@ -102,6 +102,12 @@ class DataMeshAdmin:
 
         self._logger.info("Validated Data Mesh Manager Role %s" % data_mesh_mgr_role_arn)
 
+        if current_identity.get('Arn').startswith(f"arn:aws:sts::{current_identity.get('Account')}:assumed-role/"):
+            self._logger.info(f"Executing using an assumed role so setting the ROLE as the LakeFormation principal, rather than the USER.")
+            executing_user_role = f"arn:aws:iam::{current_identity.get('Account')}:role/{current_identity.get('Arn').split('/')[1]}"
+        else:
+            executing_user_role = current_identity.get('Arn')
+
         # Horrible retry logic required to avoid boto3 exception using a role as a principal too soon after it's been created
         retries = 0
         while True:
@@ -112,7 +118,7 @@ class DataMeshAdmin:
                         "DataLakeAdmins": [
                             {"DataLakePrincipalIdentifier": data_mesh_mgr_role_arn},
                             # add the current caller identity as an admin
-                            {"DataLakePrincipalIdentifier": current_identity.get('Arn')}
+                            {"DataLakePrincipalIdentifier": executing_user_role}
                         ],
                         'CreateTableDefaultPermissions': []
                     }
@@ -127,7 +133,7 @@ class DataMeshAdmin:
             break
         self._logger.info(
             "Removed default data lake settings for Account %s. New Admins are %s and Data Mesh Manager" % (
-                current_identity.get('Account'), current_identity.get('Arn')))
+                current_identity.get('Account'), executing_user_role))
 
         return mgr_tuple
 
