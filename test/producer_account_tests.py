@@ -4,6 +4,8 @@ import sys
 import os
 import warnings
 import boto3
+import test_utils
+from data_mesh_util.lib.constants import *
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src/resource"))
@@ -13,10 +15,6 @@ from data_mesh_util import DataMeshProducer as dmp
 from data_mesh_util.lib.SubscriberTracker import *
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
-
-MESH_ACCOUNT = '887210671223'
-CONSUMER_ACCOUNT = '206160724517'
-PRODUCER_ACCOUNT = '600214582022'
 
 
 class DataMeshProducerAccountTests(unittest.TestCase):
@@ -29,20 +27,24 @@ class DataMeshProducerAccountTests(unittest.TestCase):
     AWS_SECRET_ACCESS_KEY
     AWS_SESSION_TOKEN (Optional)
     '''
-    # bind the test class into the data mesh account
-    sts_client = boto3.client('sts')
-    current_account = sts_client.get_caller_identity()
-    session_name = utils.make_iam_session_name(current_account)
-    _data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=MESH_ACCOUNT)
-    _data_mesh_sts_session = sts_client.assume_role(RoleArn=_data_producer_role_arn,
-                                                    RoleSessionName=session_name)
+    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
+        from_path=os.getenv('CredentialsFile'))
 
-    _mgr = dmp.DataMeshProducer(data_mesh_account_id=MESH_ACCOUNT, log_level=logging.DEBUG)
+    # bind the test class into the data mesh account
+    _sts_session = test_utils.assume_source_role(_clients.get(PRODUCER), _account_ids.get(PRODUCER), PRODUCER)
+    _data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=_account_ids.get(MESH))
+    _sts_client = utils.generate_client('sts', _region, _sts_session.get('Credentials'))
+    _session_name = utils.make_iam_session_name(_sts_client.get_caller_identity())
+    _data_mesh_sts_session = _sts_client.assume_role(RoleArn=_data_producer_role_arn,
+                                                     RoleSessionName=_session_name)
+
+    _mgr = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get(MESH), log_level=logging.DEBUG)
     _current_region = os.getenv('AWS_REGION')
-    _subscription_tracker = SubscriberTracker(data_mesh_account_id=MESH_ACCOUNT,
+    _subscription_tracker = SubscriberTracker(data_mesh_account_id=_account_ids.get(MESH),
                                               credentials=_data_mesh_sts_session.get('Credentials'),
                                               region_name=_current_region,
                                               log_level=logging.DEBUG)
+
     def setUp(self) -> None:
         warnings.filterwarnings("ignore", category=ResourceWarning)
 
@@ -51,5 +53,5 @@ class DataMeshProducerAccountTests(unittest.TestCase):
             source_database_name='tpcds',
             table_name_regex='customer',
             sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",
-            sync_mesh_crawler_role_arn="arn:aws:iam::600214582022:role/service-role/AWSGlueServiceRole-Crawler"
+            sync_mesh_crawler_role_arn=f"arn:aws:iam::{self._account_ids.get(PRODUCER)}:role/service-role/AWSGlueServiceRole-Crawler"
         )

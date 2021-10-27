@@ -103,7 +103,8 @@ class DataMeshAdmin:
         self._logger.info("Validated Data Mesh Manager Role %s" % data_mesh_mgr_role_arn)
 
         if current_identity.get('Arn').startswith(f"arn:aws:sts::{current_identity.get('Account')}:assumed-role/"):
-            self._logger.info(f"Executing using an assumed role so setting the ROLE as the LakeFormation principal, rather than the USER.")
+            self._logger.info(
+                f"Executing using an assumed role so setting the ROLE as the LakeFormation principal, rather than the USER.")
             executing_user_role = f"arn:aws:iam::{current_identity.get('Account')}:role/{current_identity.get('Arn').split('/')[1]}"
         else:
             executing_user_role = current_identity.get('Arn')
@@ -279,6 +280,7 @@ class DataMeshAdmin:
 
         local_role_name = None
         remote_role_name = None
+        remote_role_arn = None
         policy_name = None
         policy_template = None
 
@@ -315,25 +317,31 @@ class DataMeshAdmin:
         self._logger.info(f"User {iam_details[1]}")
         self._logger.info(f"Group {iam_details[2]}")
 
-        remote_role_arn = None
+        local_role_arn = iam_details[0]
         if type == CONSUMER:
             self._data_consumer_role_arn = iam_details[0]
-            remote_role_arn = utils.get_datamesh_consumer_role_arn(account_id=self._data_mesh_account_id)
         else:
             self._data_producer_role_arn = iam_details[0]
-            remote_role_arn = utils.get_datamesh_producer_role_arn(account_id=self._data_mesh_account_id)
 
-        # allow the local group to assume the remote consumer policy
-        policy_name = f"Assume{remote_role_name}"
-
+        # allow the local group to assume the local role
+        policy_name = f"Assume{local_role_name}"
         policy_arn = self._automator.create_assume_role_policy(
             account_id=target_account,
             policy_name=policy_name,
-            role_arn=remote_role_arn
+            role_arn=local_role_arn
         )
-        self._logger.info(f"Validated Policy {policy_name} as {policy_arn}")
+        self._logger.debug(f"Validated Policy {policy_name} as {policy_arn}")
         self._iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
         self._logger.info(f"Bound {policy_arn} to Group {group_name}")
+
+        # allow the local iam role to assume the remote data mesh iam role
+        remote_role_arn = utils.get_role_arn(account_id=self._data_mesh_account_id, role_name=remote_role_name)
+        policy_arn = self._automator.create_assume_role_policy(
+            account_id=self._data_mesh_account_id,
+            policy_name=f"Assume{remote_role_name}",
+            role_arn=remote_role_arn
+        )
+        self._iam_client.attach_role_policy(RoleName=local_role_name, PolicyArn=policy_arn)
 
         # make the iam role a lakeformation admin
         self._automator.add_datalake_admin(principal=iam_details[0])

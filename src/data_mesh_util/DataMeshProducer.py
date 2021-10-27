@@ -281,6 +281,11 @@ class DataMeshProducer:
             table_s3_path = table.get('StorageDescriptor').get('Location')
 
             # create a data lake location for the s3 path
+            data_mesh_lf_client.register_resource(
+                ResourceArn=table_s3_path,
+                UseServiceLinkedRole=True,
+                RoleArn=self._data_producer_role_arn
+            )
 
             # create a mesh table for the local copy
             created_table = self._create_mesh_table(

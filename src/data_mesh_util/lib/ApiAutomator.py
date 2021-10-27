@@ -64,8 +64,8 @@ class ApiAutomator:
 
         self._logger.info("Enabled Account %s to assume %s" % (account_id_to_trust, update_role_name))
 
-    def configure_iam(self, policy_name: str, policy_desc: str, policy_template: str,
-                      role_name: str, role_desc: str, account_id: str, config: dict = None,
+    def configure_iam(self, policy_name: str, policy_desc: str, policy_template: str, role_name: str, role_desc: str,
+                      account_id: str, config: dict = None,
                       additional_assuming_principals: dict = None, managed_policies_to_attach: list = None):
         iam_client = self._get_client('iam')
 
@@ -167,6 +167,7 @@ class ApiAutomator:
                 )
                 self._logger.info(f"Attached managed policy {policy}")
 
+        # create an assume role policy
         self.create_assume_role_policy(
             account_id=account_id, policy_name=("Assume%s" % role_name),
             role_arn=role_arn

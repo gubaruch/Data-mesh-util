@@ -96,11 +96,11 @@ def get_consumer_role_arn(account_id: str):
 
 
 def get_datamesh_producer_role_arn(account_id: str):
-    return get_role_arn(account_id, DATA_MESH_ADMIN_PRODUCER_ROLENAME)
+    return get_role_arn(account_id, get_central_role_name(account_id, PRODUCER))
 
 
 def get_datamesh_consumer_role_arn(account_id: str):
-    return get_role_arn(account_id, DATA_MESH_ADMIN_CONSUMER_ROLENAME)
+    return get_role_arn(account_id, get_central_role_name(account_id, CONSUMER))
 
 
 def _validate_credentials(credentials) -> dict:

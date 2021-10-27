@@ -3,6 +3,8 @@ import warnings
 import logging
 import sys
 import os
+import test_utils
+from data_mesh_util.lib.constants import *
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src/resource"))
@@ -11,11 +13,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../src/lib"))
 from data_mesh_util import DataMeshConsumer as dmc
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
-
-MESH_ACCOUNT = '887210671223'
-CONSUMER_ACCOUNT = '206160724517'
-PRODUCER_ACCOUNT = '600214582022'
-DATABASE_NAME = "tpcds-%s" % PRODUCER_ACCOUNT
 
 
 class ConsumerAccountTests(unittest.TestCase):
@@ -29,19 +26,22 @@ class ConsumerAccountTests(unittest.TestCase):
     AWS_SECRET_ACCESS_KEY
     AWS_SESSION_TOKEN (Optional)
     '''
-    _mgr = dmc.DataMeshConsumer(data_mesh_account_id=MESH_ACCOUNT, log_level=logging.DEBUG)
     _logger = logging.getLogger("DataMeshConsumer")
+    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
+        from_path=os.getenv('CredentialsFile'))
+    _mgr = dmc.DataMeshConsumer(data_mesh_account_id=_account_ids.get(MESH), log_level=logging.DEBUG)
+    DATABASE_NAME = "tpcds-%s" % _account_ids.get(PRODUCER)
 
     def setUp(self) -> None:
         warnings.filterwarnings("ignore", category=ResourceWarning)
 
     def test_create_subscription(self):
         sub = self._mgr.request_access_to_product(
-            owner_account_id=PRODUCER_ACCOUNT,
-            database_name=DATABASE_NAME,
+            owner_account_id=self._account_ids.get(PRODUCER),
+            database_name=self.DATABASE_NAME,
             request_permissions=['SELECT', 'DESCRIBE'],
             tables=['customer'],
-            requesting_principal=CONSUMER_ACCOUNT
+            requesting_principal=self._account_ids.get(CONSUMER)
         )
         self.assertIsNotNone(sub)
         self._logger.info('Subscription %s' % sub)
@@ -55,9 +55,9 @@ class ConsumerAccountTests(unittest.TestCase):
     def test_fail_create_subscription(self):
         with self.assertRaises(Exception):
             sub = self._mgr.request_access_to_product(
-                owner_account_id=PRODUCER_ACCOUNT,
-                database_name=DATABASE_NAME,
+                owner_account_id=self._account_ids.get(PRODUCER),
+                database_name=self.DATABASE_NAME,
                 request_permissions=['SELECT', 'DESCRIBE'],
                 tables=['does_not_exist'],
-                requesting_principal=CONSUMER_ACCOUNT
+                requesting_principal=self._account_ids.get(CONSUMER)
             )
