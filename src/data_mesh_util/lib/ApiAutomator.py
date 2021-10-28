@@ -12,6 +12,7 @@ import data_mesh_util.lib.utils as utils
 
 
 class ApiAutomator:
+    _target_account = None
     _session = None
     _logger = None
     _region = None
@@ -20,7 +21,8 @@ class ApiAutomator:
     _logger.addHandler(logging.StreamHandler(sys.stdout))
     _clients = None
 
-    def __init__(self, session: boto3.session.Session, log_level: str = "INFO"):
+    def __init__(self, target_account:str, session: boto3.session.Session, log_level: str = "INFO"):
+        self._target_account = target_account
         self._session = session
         self._logger.setLevel(log_level)
         self._clients = {}
@@ -86,6 +88,11 @@ class ApiAutomator:
             waiter.wait(PolicyArn=policy_arn)
         except iam_client.exceptions.EntityAlreadyExistsException:
             policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
+            # iam_client.create_policy_version(
+            #     PolicyArn=policy_arn,
+            #     PolicyDocument=policy_doc,
+            #     SetAsDefault=True
+            # )
 
         self._logger.info(f"Policy {policy_name} validated as {policy_arn}")
 
@@ -168,8 +175,9 @@ class ApiAutomator:
                 self._logger.info(f"Attached managed policy {policy}")
 
         # create an assume role policy
-        self.create_assume_role_policy(
-            account_id=account_id, policy_name=("Assume%s" % role_name),
+        policy_arn = self.create_assume_role_policy(
+            source_account_id=account_id,
+            policy_name=("Assume%s" % role_name),
             role_arn=role_arn
         )
 
@@ -179,7 +187,7 @@ class ApiAutomator:
 
         return role_arn, user_arn, group_arn
 
-    def create_assume_role_policy(self, account_id: str, policy_name: str, role_arn: str):
+    def create_assume_role_policy(self, source_account_id: str, policy_name: str, role_arn: str):
         iam_client = self._get_client('iam')
 
         # create a policy that lets someone assume this new role
@@ -194,7 +202,7 @@ class ApiAutomator:
             )
             policy_arn = response.get('Policy').get('Arn')
         except iam_client.exceptions.EntityAlreadyExistsException:
-            policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
+            policy_arn = "arn:aws:iam::%s:policy%s%s" % (source_account_id, DATA_MESH_IAM_PATH, policy_name)
 
         self._logger.info(f"Validated {policy_name} as {policy_arn}")
 
@@ -314,33 +322,27 @@ class ApiAutomator:
     def get_or_create_database(self, database_name: str, database_desc: str, source_account: str = None):
         glue_client = self._get_client('glue')
 
-        database_exists = None
-        try:
-            database_exists = glue_client.get_database(
-                Name=database_name
-            )
-        except glue_client.exceptions.from_code('EntityNotFoundException'):
-            pass
-
-        if database_exists is None or 'Database' not in database_exists:
-            args = {
-                "DatabaseInput": {
-                    "Name": database_name,
-                    "Description": database_desc,
-                }
+        args = {
+            "DatabaseInput": {
+                "Name": database_name,
+                "Description": database_desc,
             }
+        }
 
-            if source_account is not None:
-                args['DatabaseInput']['TargetDatabase'] = {
-                    "CatalogId": source_account,
-                    "DatabaseName": database_name
-                }
-                del args['DatabaseInput']["Description"]
+        if source_account is not None:
+            args['DatabaseInput']['TargetDatabase'] = {
+                "CatalogId": source_account,
+                "DatabaseName": database_name
+            }
+            del args['DatabaseInput']["Description"]
 
-            # create the database
+        # create the database
+        try:
             glue_client.create_database(
                 **args
             )
+        except glue_client.exceptions.AlreadyExistsException:
+            pass
 
     def configure_db_permissions(self, database_name: str):
         glue_client = self._get_client('glue')

@@ -56,13 +56,16 @@ class DataMeshConsumer:
         self._log_level = log_level
         self._logger.setLevel(log_level)
 
-        self._consumer_automator = ApiAutomator(session=self._session, log_level=self._log_level)
-
-        # create the subscription tracker
         self._current_account = self._sts_client.get_caller_identity()
+        self._consumer_automator = ApiAutomator(target_account=self._current_account.get('Account'), session=self._session, log_level=self._log_level)
+
+        # assume the consumer role in the mesh
         session_name = utils.make_iam_session_name(self._current_account)
         self._data_mesh_account_id = data_mesh_account_id
-        self._data_consumer_role_arn = utils.get_datamesh_consumer_role_arn(account_id=data_mesh_account_id)
+        self._data_consumer_role_arn = utils.get_datamesh_consumer_role_arn(
+            source_account_id=self._current_account.get('Account'),
+            data_mesh_account_id=data_mesh_account_id
+        )
         self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_consumer_role_arn,
                                                                    RoleSessionName=session_name)
         self._logger.debug("Created new STS Session for Data Mesh Admin Consumer")
@@ -70,6 +73,7 @@ class DataMeshConsumer:
 
         utils.validate_correct_account(self._data_mesh_sts_session.get('Credentials'), data_mesh_account_id)
 
+        # create the subscription tracker
         self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_sts_session.get('Credentials'),
                                                        data_mesh_account_id=data_mesh_account_id,
                                                        region_name=self._current_region,

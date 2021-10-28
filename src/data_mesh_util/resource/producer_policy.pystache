@@ -68,7 +68,7 @@
             "Resource": "*"
         },
         {
-            "Sid": "DynamoDb1",
+            "Sid": "ProducerPolicy3",
             "Effect": "Allow",
             "Action": [
                 "dynamodb:GetItem",
@@ -84,6 +84,16 @@
                 "arn:aws:dynamodb:*:{{data_mesh_account_id}}:table/AwsDataMeshSubscriptions/index/AwsDataMeshSubscriptions-Subscriber",
                 "arn:aws:dynamodb:*:{{data_mesh_account_id}}:table/AwsDataMeshSubscriptions/index/AwsDataMeshSubscriptions-Owner"
             ]
+        },
+        {
+            "Sid": "ProducerPolicy4",
+            "Effect": "Allow",
+            "Action": [
+                "iam:GetRole",
+                "iam:GetRolePolicy",
+                "iam:PutRolePolicy"
+            ],
+            "Resource": "arn:aws:iam::{{data_mesh_account_id}}:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess"
         }
     ]
 }

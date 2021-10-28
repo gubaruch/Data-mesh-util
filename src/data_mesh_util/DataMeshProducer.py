@@ -22,7 +22,6 @@ from data_mesh_util.lib.SubscriberTracker import *
 class DataMeshProducer:
     _data_mesh_account_id = None
     _data_producer_account_id = None
-    _data_consumer_account_id = None
     _data_mesh_manager_role_arn = None
     _session = None
     _iam_client = None
@@ -60,16 +59,21 @@ class DataMeshProducer:
 
         self._log_level = log_level
         self._logger.setLevel(log_level)
-        self._producer_automator = ApiAutomator(session=self._session, log_level=self._log_level)
 
-        self._current_account = self._sts_client.get_caller_identity()
+        self._current_account = self._session.client('sts').get_caller_identity()
+        self._data_producer_account_id = self._current_account.get('Account')
+        self._producer_automator = ApiAutomator(target_account=self._data_producer_account_id,
+                                                session=self._session, log_level=self._log_level)
+
         session_name = utils.make_iam_session_name(self._current_account)
-        self._data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=data_mesh_account_id)
+        self._data_producer_role_arn = utils.get_datamesh_producer_role_arn(
+            source_account_id=self._current_account.get('Account'), data_mesh_account_id=data_mesh_account_id)
         self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_producer_role_arn,
                                                                    RoleSessionName=session_name)
         self._data_mesh_boto_session = utils.create_session(credentials=self._data_mesh_sts_session.get('Credentials'),
                                                             region=self._current_region)
-        self._mesh_automator = ApiAutomator(session=self._data_mesh_boto_session, log_level=self._log_level)
+        self._mesh_automator = ApiAutomator(target_account=self._data_mesh_account_id,
+                                            session=self._data_mesh_boto_session, log_level=self._log_level)
 
         self._logger.debug("Created new STS Session for Data Mesh Admin Producer")
         self._logger.debug(self._data_mesh_sts_session)
@@ -142,16 +146,6 @@ class DataMeshProducer:
             database_name=data_mesh_database_name, table_name=table_name,
             permissions=perms,
             grantable_permissions=perms
-        )
-
-        # grant the DataMeshAdminConsumerRole rights to describe the table, meaning any consumer can see metadata
-        self._mesh_automator.lf_grant_permissions(
-            data_mesh_account_id=self._data_mesh_account_id,
-            principal=utils.get_datamesh_consumer_role_arn(
-                account_id=self._data_mesh_account_id),
-            database_name=data_mesh_database_name, table_name=table_name,
-            permissions=['DESCRIBE'],
-            grantable_permissions=None
         )
 
         # in the producer account, accept the RAM share after 1 second - seems to be an async delay
@@ -240,12 +234,10 @@ class DataMeshProducer:
         data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
                                                     credentials=self._data_mesh_sts_session.get('Credentials'))
 
-        current_account = self._session.client('sts').get_caller_identity()
-
         # load the specified tables to be created as data products
         all_tables = self._load_glue_tables(
             glue_client=producer_glue_client,
-            catalog_id=current_account.get('Account'),
+            catalog_id=self._data_producer_account_id,
             source_db_name=source_database_name,
             table_name_regex=table_name_regex
         )
@@ -254,7 +246,7 @@ class DataMeshProducer:
         self._mesh_automator.get_or_create_database(
             database_name=data_mesh_database_name,
             database_desc="Database to contain objects from Source Database %s.%s" % (
-                current_account.get('Account'), source_database_name)
+                self._data_producer_account_id, source_database_name)
         )
         self._logger.info("Validated Data Mesh Database %s" % data_mesh_database_name)
 
@@ -264,7 +256,7 @@ class DataMeshProducer:
         # grant the producer permissions to create tables on this database
         self._mesh_automator.lf_grant_permissions(
             data_mesh_account_id=self._data_mesh_account_id,
-            principal=current_account.get('Account'),
+            principal=self._data_producer_account_id,
             database_name=data_mesh_database_name, permissions=['CREATE_TABLE', 'DESCRIBE'],
             grantable_permissions=None
         )
@@ -280,11 +272,30 @@ class DataMeshProducer:
         for table in all_tables:
             table_s3_path = table.get('StorageDescriptor').get('Location')
 
+            table_s3_arn = utils.convert_s3_path_to_arn(table_s3_path)
+
             # create a data lake location for the s3 path
-            data_mesh_lf_client.register_resource(
-                ResourceArn=table_s3_path,
-                UseServiceLinkedRole=True,
-                RoleArn=self._data_producer_role_arn
+            try:
+                data_mesh_lf_client.register_resource(
+                    ResourceArn=table_s3_arn,
+                    UseServiceLinkedRole=True
+                )
+            except data_mesh_lf_client.exceptions.AlreadyExistsException:
+                pass
+
+            # grant data lake location access
+            producer_central_role_arn = utils.get_role_arn(account_id=self._data_mesh_account_id,
+                                                           role_name=utils.get_central_role_name(
+                                                               account_id=self._data_producer_account_id,
+                                                               type=PRODUCER))
+            data_mesh_lf_client.grant_permissions(
+                Principal={
+                    'DataLakePrincipalIdentifier': producer_central_role_arn
+                },
+                Resource={
+                    'DataLocation': {'ResourceArn': table_s3_arn}
+                },
+                Permissions=['DATA_LOCATION_ACCESS']
             )
 
             # create a mesh table for the local copy
@@ -295,7 +306,7 @@ class DataMeshProducer:
                 producer_ram_client=producer_ram_client,
                 producer_glue_client=producer_glue_client,
                 data_mesh_database_name=data_mesh_database_name,
-                producer_account_id=current_account.get('Account'),
+                producer_account_id=self._data_producer_account_id,
                 data_mesh_account_id=self._data_mesh_account_id
             )
 

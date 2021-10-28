@@ -40,6 +40,10 @@ def validate_correct_account(credentials, account_id: str, should_match: bool = 
             f"Function should run within the Data Mesh Account ({account_id}) and not {caller_account}")
 
 
+def convert_s3_path_to_arn(s3_path: str) -> str:
+    return f"arn:aws:s3:::{s3_path.replace('s3://', '')}"
+
+
 def generate_policy(template_file: str, config: dict):
     with open("%s/%s" % (os.path.join(os.path.dirname(__file__), "../resource"), template_file)) as t:
         template = t.read()
@@ -95,12 +99,12 @@ def get_consumer_role_arn(account_id: str):
     return get_role_arn(account_id, DATA_MESH_CONSUMER_ROLENAME)
 
 
-def get_datamesh_producer_role_arn(account_id: str):
-    return get_role_arn(account_id, get_central_role_name(account_id, PRODUCER))
+def get_datamesh_producer_role_arn(source_account_id: str, data_mesh_account_id: str):
+    return get_role_arn(data_mesh_account_id, get_central_role_name(source_account_id, PRODUCER))
 
 
-def get_datamesh_consumer_role_arn(account_id: str):
-    return get_role_arn(account_id, get_central_role_name(account_id, CONSUMER))
+def get_datamesh_consumer_role_arn(source_account_id: str, data_mesh_account_id: str):
+    return get_role_arn(data_mesh_account_id, get_central_role_name(source_account_id, CONSUMER))
 
 
 def _validate_credentials(credentials) -> dict:

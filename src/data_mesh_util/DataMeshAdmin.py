@@ -59,7 +59,8 @@ class DataMeshAdmin:
 
         self._logger.setLevel(log_level)
         self._log_level = log_level
-        self._automator = ApiAutomator(session=self._session, log_level=self._log_level)
+        self._automator = ApiAutomator(target_account=data_mesh_account_id, session=self._session,
+                                       log_level=self._log_level)
 
     def _create_template_config(self, config: dict):
         if config is None:
@@ -109,29 +110,16 @@ class DataMeshAdmin:
         else:
             executing_user_role = current_identity.get('Arn')
 
-        # Horrible retry logic required to avoid boto3 exception using a role as a principal too soon after it's been created
-        retries = 0
-        while True:
-            try:
-                # remove default IAM settings in lakeformation for the account, and setup the manager role and this caller as admins
-                response = self._lf_client.put_data_lake_settings(
-                    DataLakeSettings={
-                        "DataLakeAdmins": [
-                            {"DataLakePrincipalIdentifier": data_mesh_mgr_role_arn},
-                            # add the current caller identity as an admin
-                            {"DataLakePrincipalIdentifier": executing_user_role}
-                        ],
-                        'CreateTableDefaultPermissions': []
-                    }
-                )
-            except self._lf_client.exceptions.InvalidInputException:
-                self._logger.info(f"Error setting DataLake Principal as {data_mesh_mgr_role_arn}. Backing off....")
-                retries += 1
-                if retries > 5:
-                    raise
-                time.sleep(3)
-                continue
-            break
+        self._automator.add_datalake_admin(principal=data_mesh_mgr_role_arn)
+        self._automator.add_datalake_admin(principal=executing_user_role)
+
+        # remove default IAM settings in lakeformation for the account, and setup the manager role and this caller as admins
+        response = self._lf_client.put_data_lake_settings(
+            DataLakeSettings={
+                'CreateTableDefaultPermissions': []
+            }
+        )
+
         self._logger.info(
             "Removed default data lake settings for Account %s. New Admins are %s and Data Mesh Manager" % (
                 current_identity.get('Account'), executing_user_role))
@@ -168,6 +156,9 @@ class DataMeshAdmin:
                 'CREATE_DATABASE'
             ]
         )
+
+        # make the iam role a data lake admin
+        self._automator.add_datalake_admin(principal=producer_iam_role_arn)
 
         self._logger.info("Granted Data Mesh Producer CREATE_DATABASE privileges on Catalog")
 
@@ -326,7 +317,7 @@ class DataMeshAdmin:
         # allow the local group to assume the local role
         policy_name = f"Assume{local_role_name}"
         policy_arn = self._automator.create_assume_role_policy(
-            account_id=target_account,
+            source_account_id=target_account,
             policy_name=policy_name,
             role_arn=local_role_arn
         )
@@ -337,14 +328,11 @@ class DataMeshAdmin:
         # allow the local iam role to assume the remote data mesh iam role
         remote_role_arn = utils.get_role_arn(account_id=self._data_mesh_account_id, role_name=remote_role_name)
         policy_arn = self._automator.create_assume_role_policy(
-            account_id=self._data_mesh_account_id,
+            source_account_id=target_account,
             policy_name=f"Assume{remote_role_name}",
             role_arn=remote_role_arn
         )
         self._iam_client.attach_role_policy(RoleName=local_role_name, PolicyArn=policy_arn)
-
-        # make the iam role a lakeformation admin
-        self._automator.add_datalake_admin(principal=iam_details[0])
 
         # create a service linked role for lakeformation
         try:

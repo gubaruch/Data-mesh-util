@@ -34,20 +34,15 @@ class DataMeshProducerAccountTests(unittest.TestCase):
     _sts_session = test_utils.assume_source_role(sts_client=_clients.get(PRODUCER),
                                                  account_id=_account_ids.get(PRODUCER),
                                                  type=PRODUCER)
+    producer_credentials = _sts_session.get('Credentials')
     _sts_client = utils.generate_client('sts', _region, _sts_session.get('Credentials'))
 
-    # now assume the producer role in the data mesh
-    _data_producer_role_arn = utils.get_datamesh_producer_role_arn(account_id=_account_ids.get(MESH))
-    _session_name = utils.make_iam_session_name(_sts_client.get_caller_identity())
-    _data_mesh_sts_session = _sts_client.assume_role(RoleArn=_data_producer_role_arn,
-                                                     RoleSessionName=_session_name)
-    producer_mesh_credentials = _data_mesh_sts_session.get('Credentials')
     _mgr = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get(MESH),
                                 log_level=logging.DEBUG,
                                 region_name=_region,
-                                use_credentials=producer_mesh_credentials)
+                                use_credentials=producer_credentials)
     _subscription_tracker = SubscriberTracker(data_mesh_account_id=_account_ids.get(MESH),
-                                              credentials=producer_mesh_credentials,
+                                              credentials=_creds.get(MESH),
                                               region_name=_region,
                                               log_level=logging.DEBUG)
 
