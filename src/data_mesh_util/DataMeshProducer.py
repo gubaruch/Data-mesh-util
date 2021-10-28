@@ -148,6 +148,15 @@ class DataMeshProducer:
             grantable_permissions=perms
         )
 
+        # grant access to the mesh account
+        created_object = self._mesh_automator.lf_grant_permissions(
+            data_mesh_account_id=self._data_mesh_account_id,
+            principal=self._data_mesh_account_id,
+            database_name=data_mesh_database_name, table_name=table_name,
+            permissions=perms,
+            grantable_permissions=perms
+        )
+
         # in the producer account, accept the RAM share after 1 second - seems to be an async delay
         if created_object is not None:
             time.sleep(1)
@@ -251,7 +260,7 @@ class DataMeshProducer:
         self._logger.info("Validated Data Mesh Database %s" % data_mesh_database_name)
 
         # set default permissions on db
-        self._mesh_automator.configure_db_permissions(database_name=data_mesh_database_name)
+        self._mesh_automator.set_default_db_permissions(database_name=data_mesh_database_name)
 
         # grant the producer permissions to create tables on this database
         self._mesh_automator.lf_grant_permissions(

@@ -344,7 +344,7 @@ class ApiAutomator:
         except glue_client.exceptions.AlreadyExistsException:
             pass
 
-    def configure_db_permissions(self, database_name: str):
+    def set_default_db_permissions(self, database_name: str):
         glue_client = self._get_client('glue')
 
         glue_client.update_database(
