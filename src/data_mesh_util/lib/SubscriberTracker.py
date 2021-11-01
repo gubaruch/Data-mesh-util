@@ -517,7 +517,7 @@ class SubscriberTracker:
         }
 
         # add the permitted grants if they are provided
-        if permitted_grants is not None and len(permitted_grants > 0):
+        if permitted_grants is not None and len(permitted_grants) > 0:
             args["ExpressionAttributeValues"][":permitted"] = permitted_grants
         else:
             # permitted grants will be set to whatever was previously requested

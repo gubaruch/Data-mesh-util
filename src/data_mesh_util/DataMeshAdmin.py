@@ -78,6 +78,31 @@ class DataMeshAdmin:
 
         self._logger.debug(self._config)
 
+    def _create_data_mesh_ro_role(self):
+        '''
+        Private method to create objects needed for read-only access to the data mesh catalog
+        :return:
+        '''
+        utils.validate_correct_account(credentials=botocore.session.get_session().get_credentials(),
+                                       account_id=self._data_mesh_account_id)
+
+        self._create_template_config(self._config)
+
+        current_identity = self._sts_client.get_caller_identity()
+        self._logger.debug("Running as %s" % str(current_identity))
+
+        ro_tuple = self._automator.configure_iam(
+            policy_name='DataMeshReadOnlyPolicy',
+            policy_desc='IAM Policy to provide read-only access to metadata',
+            policy_template="data_mesh_read_only_policy.pystache",
+            role_name=DATA_MESH_READONLY_ROLENAME,
+            role_desc='Role to be used for read-only operations on Catalog',
+            account_id=self._data_mesh_account_id,
+            data_mesh_account_id=self._data_mesh_account_id,
+            config=self._config)
+
+        return ro_tuple
+
     def _create_data_mesh_manager_role(self):
         '''
         Private method to create objects needed for an administrative role that can be used to grant access to Data Mesh roles
@@ -98,6 +123,7 @@ class DataMeshAdmin:
             role_name=DATA_MESH_MANAGER_ROLENAME,
             role_desc='Role to be used for the Data Mesh Manager function',
             account_id=self._data_mesh_account_id,
+            data_mesh_account_id=self._data_mesh_account_id,
             config=self._config)
         data_mesh_mgr_role_arn = mgr_tuple[0]
 
@@ -112,13 +138,7 @@ class DataMeshAdmin:
 
         self._automator.add_datalake_admin(principal=data_mesh_mgr_role_arn)
         self._automator.add_datalake_admin(principal=executing_user_role)
-
-        # remove default IAM settings in lakeformation for the account, and setup the manager role and this caller as admins
-        response = self._lf_client.put_data_lake_settings(
-            DataLakeSettings={
-                'CreateTableDefaultPermissions': []
-            }
-        )
+        self._automator.set_default_lf_permissions()
 
         self._logger.info(
             "Removed default data lake settings for Account %s. New Admins are %s and Data Mesh Manager" % (
@@ -141,6 +161,7 @@ class DataMeshAdmin:
             role_name=utils.get_central_role_name(account_id=account_id, type=PRODUCER),
             role_desc=f'Role to be used for Data Mesh Producer {account_id}',
             account_id=self._data_mesh_account_id,
+            data_mesh_account_id=self._data_mesh_account_id,
             config=self._config)
         producer_iam_role_arn = producer_tuple[0]
 
@@ -179,6 +200,7 @@ class DataMeshAdmin:
             role_name=utils.get_central_role_name(account_id=account_id, type=CONSUMER),
             role_desc=f'Role to be used for Data Mesh Consumer {account_id}',
             account_id=self._data_mesh_account_id,
+            data_mesh_account_id=self._data_mesh_account_id,
             config=self._config)
 
     def _api_tuple(self, item_tuple: tuple):
@@ -205,8 +227,12 @@ class DataMeshAdmin:
         # create a new IAM role in the Data Mesh Account to be used for future grants
         mgr_tuple = self._create_data_mesh_manager_role()
 
+        # create the read-only consumer role for metadata descriptions
+        ro_tuple = self._create_data_mesh_ro_role()
+
         return {
             "Manager": self._api_tuple(mgr_tuple),
+            "ReadOnly": self._api_tuple(ro_tuple),
             "SubscriptionTracker": self._subscription_tracker.get_endpoints()
         }
 
@@ -301,7 +327,8 @@ class DataMeshAdmin:
             policy_template=policy_template,
             role_name=local_role_name,
             role_desc=f'{local_role_name} facilitating principals to act as {type}',
-            account_id=target_account
+            account_id=target_account,
+            data_mesh_account_id=self._data_mesh_account_id
         )
 
         self._logger.info(f"Role {iam_details[0]}")

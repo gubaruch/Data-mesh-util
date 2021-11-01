@@ -1,21 +1,13 @@
-import datetime
 import time
 import boto3
 import os
 import sys
-import json
-
-import botocore.session
-import shortuuid
-import logging
 
 from data_mesh_util.lib.ApiAutomator import ApiAutomator
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "resource"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib"))
 
-from data_mesh_util.lib.constants import *
-import data_mesh_util.lib.utils as utils
 from data_mesh_util.lib.SubscriberTracker import *
 
 
@@ -67,7 +59,9 @@ class DataMeshProducer:
 
         session_name = utils.make_iam_session_name(self._current_account)
         self._data_producer_role_arn = utils.get_datamesh_producer_role_arn(
-            source_account_id=self._current_account.get('Account'), data_mesh_account_id=data_mesh_account_id)
+            source_account_id=self._current_account.get('Account'),
+            data_mesh_account_id=data_mesh_account_id
+        )
         self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_producer_role_arn,
                                                                    RoleSessionName=session_name)
         self._data_mesh_boto_session = utils.create_session(credentials=self._data_mesh_sts_session.get('Credentials'),
@@ -107,7 +101,7 @@ class DataMeshProducer:
 
     def _create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
                            producer_glue_client, data_mesh_database_name: str, producer_account_id: str,
-                           data_mesh_account_id: str):
+                           data_mesh_account_id: str, create_public_metadata: bool = True):
         '''
         API to create a table as a data product in the data mesh
         :param table_def:
@@ -143,19 +137,22 @@ class DataMeshProducer:
         created_object = self._mesh_automator.lf_grant_permissions(
             data_mesh_account_id=self._data_mesh_account_id,
             principal=producer_account_id,
-            database_name=data_mesh_database_name, table_name=table_name,
+            database_name=data_mesh_database_name,
+            table_name=table_name,
             permissions=perms,
             grantable_permissions=perms
         )
 
-        # grant access to the mesh account
-        created_object = self._mesh_automator.lf_grant_permissions(
-            data_mesh_account_id=self._data_mesh_account_id,
-            principal=self._data_mesh_account_id,
-            database_name=data_mesh_database_name, table_name=table_name,
-            permissions=perms,
-            grantable_permissions=perms
-        )
+        # if create public metadata is True, then grant describe to the general data mesh consumer role
+        if create_public_metadata is True:
+            created_object = self._mesh_automator.lf_grant_permissions(
+                data_mesh_account_id=self._data_mesh_account_id,
+                principal=utils.get_role_arn(self._data_mesh_account_id, DATA_MESH_READONLY_ROLENAME),
+                database_name=data_mesh_database_name,
+                table_name=table_name,
+                permissions=['DESCRIBE'],
+                grantable_permissions=None
+            )
 
         # in the producer account, accept the RAM share after 1 second - seems to be an async delay
         if created_object is not None:
@@ -209,7 +206,7 @@ class DataMeshProducer:
                 get_table_response = glue_client.get_tables(
                     **get_tables_args
                 )
-            except glue_client.EntityNotFoundException:
+            except glue_client.exceptions.EntityNotFoundException:
                 _no_data()
 
             if 'NextToken' in get_table_response:
@@ -229,7 +226,7 @@ class DataMeshProducer:
     def _make_database_name(self, database_name: str):
         return "%s-%s" % (database_name, self._current_account.get('Account'))
 
-    def create_data_products(self, source_database_name: str,
+    def create_data_products(self, source_database_name: str, create_public_metadata: bool = True,
                              table_name_regex: str = None, sync_mesh_catalog_schedule: str = None,
                              sync_mesh_crawler_role_arn: str = None):
         # generate the target database name for the mesh
@@ -263,6 +260,7 @@ class DataMeshProducer:
         self._mesh_automator.set_default_db_permissions(database_name=data_mesh_database_name)
 
         # grant the producer permissions to create tables on this database
+        # TODO may not be needed
         self._mesh_automator.lf_grant_permissions(
             data_mesh_account_id=self._data_mesh_account_id,
             principal=self._data_producer_account_id,
@@ -316,7 +314,8 @@ class DataMeshProducer:
                 producer_glue_client=producer_glue_client,
                 data_mesh_database_name=data_mesh_database_name,
                 producer_account_id=self._data_producer_account_id,
-                data_mesh_account_id=self._data_mesh_account_id
+                data_mesh_account_id=self._data_mesh_account_id,
+                create_public_metadata=create_public_metadata
             )
 
             # add a bucket policy entry allowing the data mesh lakeformation service linked role to perform GetObject*

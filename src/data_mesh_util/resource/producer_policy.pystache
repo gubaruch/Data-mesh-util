@@ -93,7 +93,10 @@
                 "iam:GetRolePolicy",
                 "iam:PutRolePolicy"
             ],
-            "Resource": "arn:aws:iam::{{data_mesh_account_id}}:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess"
+            "Resource": [
+                "arn:aws:iam::{{data_mesh_account_id}}:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess",
+                "arn:aws:iam::{{data_mesh_account_id}}:role/AwsDataMesh/DataMeshAdminReadOnly"
+            ]
         }
     ]
 }

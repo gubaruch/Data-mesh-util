@@ -87,6 +87,10 @@ def flatten_default_tags():
     return output
 
 
+def get_policy_arn(account_id: str, policy_name: str) -> str:
+    return "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
+
+
 def get_role_arn(account_id: str, role_name: str):
     return "arn:aws:iam::%s:role%s%s" % (account_id, DATA_MESH_IAM_PATH, role_name)
 

@@ -1,31 +1,20 @@
-import logging
-import unittest
-import sys
+import argparse
 import os
 import warnings
-import boto3
-import test_utils
+import test.test_utils as test_utils
 from data_mesh_util.lib.constants import *
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../src/resource"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../src/lib"))
 
 from data_mesh_util import DataMeshProducer as dmp
 from data_mesh_util.lib.SubscriberTracker import *
+import logging
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
 
-class DataMeshProducerAccountTests(unittest.TestCase):
+class Step1():
     '''
-    Class to test the functionality of a data producer. Should be run using credentials for a principal who can assume
-    the DataMeshAdminProducer role in the data mesh. Requires environment variables:
-
-    AWS_REGION
-    AWS_ACCESS_KEY_ID
-    AWS_SECRET_ACCESS_KEY
-    AWS_SESSION_TOKEN (Optional)
+    Create a data product. Should be run using credentials for a principal who can assume
+    the DataMeshAdminProducer role in the data mesh.
     '''
     _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
         from_path=os.getenv('CredentialsFile'))
@@ -35,7 +24,7 @@ class DataMeshProducerAccountTests(unittest.TestCase):
                                                  account_id=_account_ids.get(PRODUCER),
                                                  type=PRODUCER)
     producer_credentials = _sts_session.get('Credentials')
-    _sts_client = utils.generate_client('sts', _region, _sts_session.get('Credentials'))
+    _sts_client = utils.generate_client('sts', _region, producer_credentials)
 
     _mgr = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get(MESH),
                                 log_level=logging.DEBUG,
@@ -49,11 +38,22 @@ class DataMeshProducerAccountTests(unittest.TestCase):
     def setUp(self) -> None:
         warnings.filterwarnings("ignore", category=ResourceWarning)
 
-    def test_create_data_product(self):
+    def create_data_product(self, database_name: str, table_regex: str, cron_expr: str, crawler_role: str):
         self._mgr.create_data_products(
-            source_database_name='tpcds',
-            table_name_regex='customer',
-            create_public_metadata=True
-            # sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",
-            # sync_mesh_crawler_role_arn=f"arn:aws:iam::{self._account_ids.get(PRODUCER)}:role/service-role/AWSGlueServiceRole-Crawler"
+            source_database_name=database_name,
+            table_name_regex=table_regex,
+            create_public_metadata=True,
+            sync_mesh_catalog_schedule=cron_expr,
+            sync_mesh_crawler_role_arn=crawler_role
         )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--database_name', dest='database_name', required=True)
+    parser.add_argument('--table_regex', dest='table_regex', required=True)
+    parser.add_argument('--cron_expr', dest='cron_expr', required=False)
+    parser.add_argument('--crawler_role', dest='crawler_role', required=False)
+
+    args = parser.parse_args()
+    Step1().create_data_product(args.database_name, args.table_regex, args.cron_expr, args.crawler_role)

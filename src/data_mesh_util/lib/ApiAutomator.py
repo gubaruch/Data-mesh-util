@@ -21,7 +21,7 @@ class ApiAutomator:
     _logger.addHandler(logging.StreamHandler(sys.stdout))
     _clients = None
 
-    def __init__(self, target_account:str, session: boto3.session.Session, log_level: str = "INFO"):
+    def __init__(self, target_account: str, session: boto3.session.Session, log_level: str = "INFO"):
         self._target_account = target_account
         self._session = session
         self._logger.setLevel(log_level)
@@ -67,7 +67,7 @@ class ApiAutomator:
         self._logger.info("Enabled Account %s to assume %s" % (account_id_to_trust, update_role_name))
 
     def configure_iam(self, policy_name: str, policy_desc: str, policy_template: str, role_name: str, role_desc: str,
-                      account_id: str, config: dict = None,
+                      account_id: str, data_mesh_account_id: str, config: dict = None,
                       additional_assuming_principals: dict = None, managed_policies_to_attach: list = None):
         iam_client = self._get_client('iam')
 
@@ -87,12 +87,7 @@ class ApiAutomator:
             waiter = iam_client.get_waiter('policy_exists')
             waiter.wait(PolicyArn=policy_arn)
         except iam_client.exceptions.EntityAlreadyExistsException:
-            policy_arn = "arn:aws:iam::%s:policy%s%s" % (account_id, DATA_MESH_IAM_PATH, policy_name)
-            # iam_client.create_policy_version(
-            #     PolicyArn=policy_arn,
-            #     PolicyDocument=policy_doc,
-            #     SetAsDefault=True
-            # )
+            policy_arn = utils.get_policy_arn(account_id, policy_name)
 
         self._logger.info(f"Policy {policy_name} validated as {policy_arn}")
 
@@ -140,7 +135,7 @@ class ApiAutomator:
         try:
             # now create the IAM Role with a trust policy to the indicated principal and the root user
             aws_principals = [user_arn, ("arn:aws:iam::%s:root" % account_id)]
-            role_response = iam_client.create_role(
+            iam_client.create_role(
                 Path=DATA_MESH_IAM_PATH,
                 RoleName=role_name,
                 AssumeRolePolicyDocument=json.dumps(
@@ -184,6 +179,12 @@ class ApiAutomator:
         # now let the group assume the role
         iam_client.attach_group_policy(GroupName=group_name, PolicyArn=policy_arn)
         self._logger.info(f"Bound {policy_arn} to Group {group_name}")
+
+        # let the role assume the read only consumer policy
+        if account_id == data_mesh_account_id:
+            iam_client.attach_role_policy(RoleName=role_name,
+                                          PolicyArn=utils.get_policy_arn(data_mesh_account_id,
+                                                                         f"Assume{DATA_MESH_READONLY_ROLENAME}"))
 
         return role_arn, user_arn, group_arn
 
@@ -317,6 +318,10 @@ class ApiAutomator:
             )
             self._logger.info("Created new Glue Crawler %s" % crawler_name)
 
+        # create lakeformation permissions in the mesh account for the glue crawler role
+
+        # create s3 permission for glue crawler role
+
         return crawler_name
 
     def get_or_create_database(self, database_name: str, database_desc: str, source_account: str = None):
@@ -354,6 +359,13 @@ class ApiAutomator:
                 "CreateTableDefaultPermissions": []
             }
         )
+
+    def set_default_lf_permissions(self):
+        # remove default IAM settings in lakeformation for the account, and setup the manager role and this caller as admins
+        lf_client = self._get_client('lakeformation')
+        settings = lf_client.get_data_lake_settings().get('DataLakeSettings')
+        settings['CreateTableDefaultPermissions'] = []
+        lf_client.put_data_lake_settings(DataLakeSettings=settings)
 
     def add_datalake_admin(self, principal: str):
         lf_client = self._get_client('lakeformation')
