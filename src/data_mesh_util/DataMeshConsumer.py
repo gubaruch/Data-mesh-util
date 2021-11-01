@@ -57,7 +57,8 @@ class DataMeshConsumer:
         self._logger.setLevel(log_level)
 
         self._current_account = self._sts_client.get_caller_identity()
-        self._consumer_automator = ApiAutomator(target_account=self._current_account.get('Account'), session=self._session, log_level=self._log_level)
+        self._consumer_automator = ApiAutomator(target_account=self._current_account.get('Account'),
+                                                session=self._session, log_level=self._log_level)
 
         # assume the consumer role in the mesh
         session_name = utils.make_iam_session_name(self._current_account)
@@ -125,6 +126,12 @@ class DataMeshConsumer:
         self._consumer_automator.accept_pending_lf_resource_shares(
             sender_account=self._data_mesh_account_id
         )
+
+        for t in subscription.get(TABLE_NAME):
+            self._consumer_automator.create_remote_table(
+                data_mesh_account_id=self._data_mesh_account_id, database_name=subscription.get(DATABASE_NAME),
+                table_name=t
+            )
 
     def list_product_access(self):
         '''

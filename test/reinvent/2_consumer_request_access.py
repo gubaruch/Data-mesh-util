@@ -28,7 +28,6 @@ class Step2():
                                 log_level=logging.DEBUG,
                                 region_name=_region,
                                 use_credentials=consumer_credentials)
-    DATABASE_NAME = "tpcds-%s" % _account_ids.get(PRODUCER)
 
     def setUp(self) -> None:
         warnings.filterwarnings("ignore", category=ResourceWarning)

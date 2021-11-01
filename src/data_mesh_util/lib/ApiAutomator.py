@@ -324,6 +324,28 @@ class ApiAutomator:
 
         return crawler_name
 
+    def create_remote_table(self, data_mesh_account_id: str,
+                            database_name: str,
+                            table_name: str) -> None:
+        link_table_name = "%s_link" % table_name
+
+        try:
+            glue_client = self._get_client(('glue'))
+            glue_client.create_table(
+                DatabaseName=database_name,
+                TableInput={"Name": link_table_name,
+                            "TargetTable": {"CatalogId": data_mesh_account_id,
+                                            "DatabaseName": database_name,
+                                            "Name": table_name
+                                            }
+                            }
+            )
+            self._logger.info(f"Created Resource Link Table {link_table_name}")
+        except glue_client.exceptions.from_code('AlreadyExistsException'):
+            self._logger.info(f"Resource Link Table {link_table_name} Already Exists")
+
+        return link_table_name
+
     def get_or_create_database(self, database_name: str, database_desc: str, source_account: str = None):
         glue_client = self._get_client('glue')
 

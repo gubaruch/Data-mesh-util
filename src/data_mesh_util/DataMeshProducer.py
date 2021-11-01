@@ -162,22 +162,13 @@ class DataMeshProducer:
             )
 
             # create a resource link for the data mesh table in producer account
-            link_table_name = "%s_link" % table_name
-            try:
-                producer_glue_client.create_table(
-                    DatabaseName=data_mesh_database_name,
-                    TableInput={"Name": link_table_name,
-                                "TargetTable": {"CatalogId": data_mesh_account_id,
-                                                "DatabaseName": data_mesh_database_name,
-                                                "Name": table_name
-                                                }
-                                }
-                )
-                self._logger.info(f"Created Resource Link Table {link_table_name}")
-            except producer_glue_client.exceptions.from_code('AlreadyExistsException'):
-                self._logger.info(f"Resource Link Table {link_table_name} Already Exists")
+            local_table_name = self._producer_automator.create_remote_table(
+                data_mesh_account_id=self._data_mesh_account_id,
+                database_name=data_mesh_database_name,
+                table_name=table_name
+            )
 
-            return table_name, link_table_name
+            return table_name, local_table_name
 
     def _load_glue_tables(self, glue_client, catalog_id: str, source_db_name: str, table_name_regex: str):
         # get the tables which are included in the set provided through args
