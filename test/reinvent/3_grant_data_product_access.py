@@ -1,6 +1,11 @@
 import logging
-import os
 import warnings
+import sys
+import os
+import inspect
+two_up = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))))
+sys.path.insert(0, two_up)
+
 import test.test_utils as test_utils
 from data_mesh_util.lib.constants import *
 import argparse
@@ -20,8 +25,7 @@ class Step3():
     AWS_SECRET_ACCESS_KEY
     AWS_SESSION_TOKEN (Optional)
     '''
-    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
-        from_path=os.getenv('CredentialsFile'))
+    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file()
 
     # bind the test class into the producer account
     _sts_session = test_utils.assume_source_role(sts_client=_clients.get(PRODUCER),

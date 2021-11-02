@@ -1,9 +1,13 @@
 import argparse
-import os
 import warnings
+import sys
+import os
+import inspect
+two_up = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))))
+sys.path.insert(0, two_up)
+
 import test.test_utils as test_utils
 from data_mesh_util.lib.constants import *
-
 from data_mesh_util import DataMeshProducer as dmp
 from data_mesh_util.lib.SubscriberTracker import *
 import logging
@@ -16,8 +20,7 @@ class Step1():
     Create a data product. Should be run using credentials for a principal who can assume
     the DataMeshAdminProducer role in the data mesh.
     '''
-    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
-        from_path=os.getenv('CredentialsFile'))
+    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file()
 
     # bind the test class into the producer account
     _sts_session = test_utils.assume_source_role(sts_client=_clients.get(PRODUCER),

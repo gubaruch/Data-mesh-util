@@ -1,21 +1,26 @@
 import json
-import sys
 import os
+import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src/resource"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src/lib"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../test"))
 
 import data_mesh_util.lib.utils as utils
 from data_mesh_util.lib.constants import *
 
-
-def load_client_info_from_file(from_path: str):
+def load_client_info_from_file(from_path: str = None):
     if from_path is None:
-        raise Exception("Unable to load Client Connection information from None file")
+        use_path = os.getenv('CredentialsFile')
+    else:
+        use_path = from_path
+
+    if use_path is None:
+        raise Exception(
+            "Unable to load Client Connection information without a file reference. Provide a direct path or set environment variable CredentialsFile")
+
     _creds = None
-    with open(from_path, 'r') as w:
+    with open(use_path, 'r') as w:
         _creds = json.load(w)
         w.close()
 

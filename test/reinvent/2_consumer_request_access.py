@@ -1,6 +1,11 @@
 import argparse
 import warnings
+import sys
 import os
+import inspect
+two_up = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))))
+sys.path.insert(0, two_up)
+
 import test.test_utils as test_utils
 from data_mesh_util.lib.constants import *
 from data_mesh_util import DataMeshConsumer as dmc
@@ -14,8 +19,7 @@ class Step2():
     '''
     Consumer functionality to create a subscription request.
     '''
-    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
-        from_path=os.getenv('CredentialsFile'))
+    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file()
 
     # bind the test class into the consumer account
     _sts_session = test_utils.assume_source_role(sts_client=_clients.get(CONSUMER),
