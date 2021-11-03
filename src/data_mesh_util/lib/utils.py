@@ -123,7 +123,7 @@ def _validate_credentials(credentials) -> dict:
 
     if out.get('AccessKeyId') is None or out.get('SecretAccessKey') is None:
         raise Exception('Malformed Credentials - missing AccessKeyId or SecretAccessKey')
-    
+
     return out
 
 

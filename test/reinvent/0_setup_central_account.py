@@ -47,5 +47,4 @@ class Step0():
 
 
 if __name__ == '__main__':
-    exit()
     Step0().setup_central_account()
