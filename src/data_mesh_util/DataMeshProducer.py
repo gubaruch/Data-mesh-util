@@ -133,7 +133,7 @@ class DataMeshProducer:
             self._logger.info(f"Glue Table {table_name} Already Exists")
 
         # grant access to the producer account
-        perms = ['ALL']
+        perms = ['INSERT', 'SELECT', 'ALTER', 'DELETE', 'DESCRIBE']
         created_object = self._mesh_automator.lf_grant_permissions(
             data_mesh_account_id=self._data_mesh_account_id,
             principal=producer_account_id,
@@ -162,13 +162,15 @@ class DataMeshProducer:
             )
 
             # create a resource link for the data mesh table in producer account
-            local_table_name = self._producer_automator.create_remote_table(
+            link_table_name = f"{table_name}_link"
+            self._producer_automator.create_remote_table(
                 data_mesh_account_id=self._data_mesh_account_id,
                 database_name=data_mesh_database_name,
-                table_name=table_name
+                local_table_name=link_table_name,
+                remote_table_name=table_name
             )
 
-            return table_name, local_table_name
+            return table_name, link_table_name
 
     def _load_glue_tables(self, glue_client, catalog_id: str, source_db_name: str, table_name_regex: str):
         # get the tables which are included in the set provided through args
@@ -251,11 +253,11 @@ class DataMeshProducer:
         self._mesh_automator.set_default_db_permissions(database_name=data_mesh_database_name)
 
         # grant the producer permissions to create tables on this database
-        # TODO may not be needed
         self._mesh_automator.lf_grant_permissions(
             data_mesh_account_id=self._data_mesh_account_id,
             principal=self._data_producer_account_id,
-            database_name=data_mesh_database_name, permissions=['CREATE_TABLE', 'DESCRIBE'],
+            database_name=data_mesh_database_name,
+            permissions=['CREATE_TABLE', 'DESCRIBE'],
             grantable_permissions=None
         )
         self._logger.info("Granted access on Database %s to Producer" % data_mesh_database_name)

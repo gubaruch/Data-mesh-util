@@ -112,15 +112,19 @@ def get_datamesh_consumer_role_arn(source_account_id: str, data_mesh_account_id:
 
 
 def _validate_credentials(credentials) -> dict:
+    out = {}
     if isinstance(credentials, Mapping):
-        return credentials
+        out = credentials
     else:
         # treat as a Boto3 Credentials object
         out = {'AccessKeyId': credentials.access_key, "SecretAccessKey": credentials.secret_key}
         if credentials.token is not None:
             out['SessionToken'] = credentials.token
 
-        return out
+    if out.get('AccessKeyId') is None or out.get('SecretAccessKey') is None:
+        raise Exception('Malformed Credentials - missing AccessKeyId or SecretAccessKey')
+    
+    return out
 
 
 def create_session(credentials=None, region=None):

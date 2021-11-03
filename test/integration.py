@@ -21,9 +21,7 @@ class DataMeshIntegrationTests(unittest.TestCase):
     _log_level = "DEBUG"
 
     # load credentials
-    _region, _client, _account_ids, _creds = test_utils.load_client_info_from_file(
-        from_path=os.getenv('CredentialsFile')
-    )
+    _region, _client, _account_ids, _creds = test_utils.load_client_info_from_file()
 
     # create a subscriber tracker that is bound into the Mesh account, that will help us to inspect what's happening behind the scenes
     _subscription_tracker = SubscriberTracker(credentials=boto3.session.Session().get_credentials(),

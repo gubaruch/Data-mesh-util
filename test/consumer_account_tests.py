@@ -6,9 +6,10 @@ import os
 import test_utils
 from data_mesh_util.lib.constants import *
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../src/resource"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../src/lib"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src/data_mesh_util"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src/data_mesh_util/resource"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src/data_mesh_util/lib"))
+
 import data_mesh_util.lib.utils as utils
 from data_mesh_util import DataMeshConsumer as dmc
 
@@ -27,8 +28,7 @@ class ConsumerAccountTests(unittest.TestCase):
     AWS_SESSION_TOKEN (Optional)
     '''
     _logger = logging.getLogger("DataMeshConsumer")
-    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
-        from_path=os.getenv('CredentialsFile'))
+    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file()
 
     # bind the test class into the consumer account
     _sts_session = test_utils.assume_source_role(sts_client=_clients.get(CONSUMER),

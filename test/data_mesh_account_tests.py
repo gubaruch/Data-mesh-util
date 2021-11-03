@@ -19,8 +19,7 @@ MESH_ACCOUNT = '887210671223'
 
 class DataMeshAdminAccountTests(unittest.TestCase):
     _logger = logging.getLogger("DataMeshAdmin")
-    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
-        from_path=os.getenv('CredentialsFile'))
+    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file()
 
     def setUp(self) -> None:
         warnings.filterwarnings("ignore", category=ResourceWarning)

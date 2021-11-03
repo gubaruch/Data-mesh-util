@@ -56,8 +56,10 @@ class DataMeshConsumer:
         self._log_level = log_level
         self._logger.setLevel(log_level)
 
-        self._current_account = self._sts_client.get_caller_identity()
-        self._consumer_automator = ApiAutomator(target_account=self._current_account.get('Account'),
+        self._current_account = self._session.client('sts').get_caller_identity()
+        self._data_consumer_account_id = self._current_account.get('Account')
+
+        self._consumer_automator = ApiAutomator(target_account=self._data_consumer_account_id,
                                                 session=self._session, log_level=self._log_level)
 
         # assume the consumer role in the mesh
@@ -115,23 +117,34 @@ class DataMeshConsumer:
         '''
         # grab the subscription
         subscription = self._subscription_tracker.get_subscription(subscription_id=subscription_id)
+        data_mesh_database_name = subscription.get(DATABASE_NAME)
 
         # create a shared database reference
         self._consumer_automator.get_or_create_database(
-            database_name=subscription.get(DATABASE_NAME),
+            database_name=data_mesh_database_name,
             database_desc=f"Database to contain objects from Producer Database {subscription.get(OWNER_PRINCIPAL)}.{subscription.get(DATABASE_NAME)}",
             source_account=self._data_mesh_account_id
+        )
+
+        self._consumer_automator.lf_grant_permissions(
+            data_mesh_account_id=self._data_mesh_account_id,
+            principal=self._data_producer_account_id,
+            database_name=data_mesh_database_name,
+            permissions=['CREATE_TABLE', 'DESCRIBE', 'DROP'],
+            grantable_permissions=None
         )
 
         self._consumer_automator.accept_pending_lf_resource_shares(
             sender_account=self._data_mesh_account_id
         )
 
-        for t in subscription.get(TABLE_NAME):
-            self._consumer_automator.create_remote_table(
-                data_mesh_account_id=self._data_mesh_account_id, database_name=subscription.get(DATABASE_NAME),
-                table_name=t
-            )
+        # for t in subscription.get(TABLE_NAME):
+        #     self._consumer_automator.create_remote_table(
+        #         data_mesh_account_id=self._data_mesh_account_id,
+        #         database_name=subscription.get(DATABASE_NAME),
+        #         local_table_name=t,
+        #         remote_table_name=t
+        #     )
 
     def list_product_access(self):
         '''

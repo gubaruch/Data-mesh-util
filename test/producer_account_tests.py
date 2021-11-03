@@ -27,8 +27,7 @@ class DataMeshProducerAccountTests(unittest.TestCase):
     AWS_SECRET_ACCESS_KEY
     AWS_SESSION_TOKEN (Optional)
     '''
-    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file(
-        from_path=os.getenv('CredentialsFile'))
+    _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file()
 
     # bind the test class into the producer account
     _sts_session = test_utils.assume_source_role(sts_client=_clients.get(PRODUCER),

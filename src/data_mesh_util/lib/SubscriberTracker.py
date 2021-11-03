@@ -446,8 +446,11 @@ class SubscriberTracker:
                 raise Exception(ist)
             else:
                 return True
-        except self._dynamo_client.exceptions.ConditionalCheckFailedException:
-            raise Exception(ist)
+        except Exception as e:
+            if 'ConditionalCheckFailedException' in str(e):
+                pass
+            else:
+                raise e
 
     def delete_subscription(self, subscription_id: str, reason: str):
         self.update_status(

@@ -209,7 +209,7 @@ class ApiAutomator:
 
         return policy_arn
 
-    def lf_grant_permissions(self, data_mesh_account_id, principal: str, database_name: str,
+    def lf_grant_permissions(self, data_mesh_account_id: str, principal: str, database_name: str,
                              table_name: str = None,
                              permissions: list = ['ALL'],
                              grantable_permissions: list = ['ALL']):
@@ -326,25 +326,22 @@ class ApiAutomator:
 
     def create_remote_table(self, data_mesh_account_id: str,
                             database_name: str,
-                            table_name: str) -> None:
-        link_table_name = "%s_link" % table_name
-
+                            local_table_name: str,
+                            remote_table_name: str) -> None:
         try:
             glue_client = self._get_client(('glue'))
             glue_client.create_table(
                 DatabaseName=database_name,
-                TableInput={"Name": link_table_name,
+                TableInput={"Name": local_table_name,
                             "TargetTable": {"CatalogId": data_mesh_account_id,
                                             "DatabaseName": database_name,
-                                            "Name": table_name
+                                            "Name": remote_table_name
                                             }
                             }
             )
-            self._logger.info(f"Created Resource Link Table {link_table_name}")
+            self._logger.info(f"Created Resource Link Table {local_table_name}")
         except glue_client.exceptions.from_code('AlreadyExistsException'):
-            self._logger.info(f"Resource Link Table {link_table_name} Already Exists")
-
-        return link_table_name
+            self._logger.info(f"Resource Link Table {local_table_name} Already Exists")
 
     def get_or_create_database(self, database_name: str, database_desc: str, source_account: str = None):
         glue_client = self._get_client('glue')
@@ -375,6 +372,7 @@ class ApiAutomator:
         glue_client = self._get_client('glue')
 
         glue_client.update_database(
+            CatalogId=self._target_account,
             Name=database_name,
             DatabaseInput={
                 "Name": database_name,
