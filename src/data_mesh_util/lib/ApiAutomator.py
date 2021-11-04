@@ -147,6 +147,8 @@ class ApiAutomator:
             # wait for role active
             waiter = iam_client.get_waiter('role_exists')
             waiter.wait(RoleName=role_name)
+
+            role_arn = utils.get_role_arn(account_id, role_name)
         except iam_client.exceptions.EntityAlreadyExistsException:
             role_arn = iam_client.get_role(RoleName=role_name).get(
                 'Role').get('Arn')

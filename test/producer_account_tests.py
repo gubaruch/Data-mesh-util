@@ -55,4 +55,6 @@ class DataMeshProducerAccountTests(unittest.TestCase):
             create_public_metadata=True
             # sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",
             # sync_mesh_crawler_role_arn=f"arn:aws:iam::{self._account_ids.get(PRODUCER)}:role/service-role/AWSGlueServiceRole-Crawler"
+            # expose_data_mesh_db_name=None,
+            # expose_table_references_with_suffix=None
         )

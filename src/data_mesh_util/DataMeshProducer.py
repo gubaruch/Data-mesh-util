@@ -101,7 +101,8 @@ class DataMeshProducer:
 
     def _create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
                            producer_glue_client, data_mesh_database_name: str, producer_account_id: str,
-                           data_mesh_account_id: str, create_public_metadata: bool = True):
+                           data_mesh_account_id: str, create_public_metadata: bool = True,
+                           expose_table_references_with_suffix: str = "_link"):
         '''
         API to create a table as a data product in the data mesh
         :param table_def:
@@ -163,6 +164,9 @@ class DataMeshProducer:
 
             # create a resource link for the data mesh table in producer account
             link_table_name = f"{table_name}_link"
+            if expose_table_references_with_suffix is not None:
+                link_table_name = f"{table_name}{expose_table_references_with_suffix}"
+
             self._producer_automator.create_remote_table(
                 data_mesh_account_id=self._data_mesh_account_id,
                 database_name=data_mesh_database_name,
@@ -219,11 +223,17 @@ class DataMeshProducer:
     def _make_database_name(self, database_name: str):
         return "%s-%s" % (database_name, self._current_account.get('Account'))
 
-    def create_data_products(self, source_database_name: str, create_public_metadata: bool = True,
-                             table_name_regex: str = None, sync_mesh_catalog_schedule: str = None,
-                             sync_mesh_crawler_role_arn: str = None):
+    def create_data_products(self, source_database_name: str,
+                             create_public_metadata: bool = True,
+                             table_name_regex: str = None,
+                             sync_mesh_catalog_schedule: str = None,
+                             sync_mesh_crawler_role_arn: str = None,
+                             expose_data_mesh_db_name: str = None,
+                             expose_table_references_with_suffix: str = "_link"):
         # generate the target database name for the mesh
         data_mesh_database_name = self._make_database_name(source_database_name)
+        if expose_data_mesh_db_name is not None:
+            data_mesh_database_name = expose_data_mesh_db_name
 
         # create clients for the current account and with the new credentials in the data mesh account
         producer_glue_client = self._session.client('glue', region_name=self._current_region)
@@ -308,7 +318,8 @@ class DataMeshProducer:
                 data_mesh_database_name=data_mesh_database_name,
                 producer_account_id=self._data_producer_account_id,
                 data_mesh_account_id=self._data_mesh_account_id,
-                create_public_metadata=create_public_metadata
+                create_public_metadata=create_public_metadata,
+                expose_table_references_with_suffix=expose_table_references_with_suffix
             )
 
             # add a bucket policy entry allowing the data mesh lakeformation service linked role to perform GetObject*

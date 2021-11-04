@@ -47,7 +47,9 @@ class Step1():
             table_name_regex=table_regex,
             create_public_metadata=True,
             sync_mesh_catalog_schedule=cron_expr,
-            sync_mesh_crawler_role_arn=crawler_role
+            sync_mesh_crawler_role_arn=crawler_role,
+            expose_data_mesh_db_name=None,
+            expose_table_references_with_suffix=None
         )
 
 
