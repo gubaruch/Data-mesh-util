@@ -224,11 +224,11 @@ class DataMeshAdmin:
                                                        region_name=self._region,
                                                        log_level=self._log_level)
 
-        # create a new IAM role in the Data Mesh Account to be used for future grants
-        mgr_tuple = self._create_data_mesh_manager_role()
-
         # create the read-only consumer role for metadata descriptions
         ro_tuple = self._create_data_mesh_ro_role()
+
+        # create a new IAM role in the Data Mesh Account to be used for future grants
+        mgr_tuple = self._create_data_mesh_manager_role()
 
         return {
             "Manager": self._api_tuple(mgr_tuple),
