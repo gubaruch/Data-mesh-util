@@ -360,6 +360,7 @@ class DataMeshAdmin:
             role_arn=remote_role_arn
         )
         self._iam_client.attach_role_policy(RoleName=local_role_name, PolicyArn=policy_arn)
+        self._logger.info(f"Enabled Account {target_account} to Assume {remote_role_arn} through {policy_arn}")
 
         # create a service linked role for lakeformation
         try:
