@@ -132,6 +132,9 @@ class ApiAutomator:
 
         role_arn = None
 
+        self._logger.debug("Waiting for User to be ready for inclusion in AssumeRolePolicy")
+        time.sleep(1)
+
         try:
             # now create the IAM Role with a trust policy to the indicated principal and the root user
             aws_principals = [user_arn, ("arn:aws:iam::%s:root" % account_id)]
@@ -154,6 +157,8 @@ class ApiAutomator:
                 'Role').get('Arn')
 
         self._logger.info(f"Validated Role {role_name} as {role_arn}")
+        self._logger.debug("Waiting for Role to be ready for Policy Attach")
+        time.sleep(1)
 
         # attach the created policy to the role
         iam_client.attach_role_policy(
