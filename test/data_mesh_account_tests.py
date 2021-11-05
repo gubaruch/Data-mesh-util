@@ -46,7 +46,7 @@ class DataMeshAdminAccountTests(unittest.TestCase):
         consumer_admin = dmu.DataMeshAdmin(data_mesh_account_id=MESH_ACCOUNT, region_name=self._region,
                                            log_level=logging.DEBUG, use_creds=self._creds.get(CONSUMER_ADMIN))
         consumer_admin.initialize_consumer_account()
-        
+
         # enable the consumer in the mesh account
         mesh_admin = dmu.DataMeshAdmin(data_mesh_account_id=MESH_ACCOUNT, region_name=self._region,
                                        log_level=logging.DEBUG, use_creds=self._creds.get(MESH))

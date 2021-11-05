@@ -44,11 +44,7 @@
                 "lakeformation:RegisterResource",
                 "lakeformation:UpdateResource"
             ],
-            "Resource": [
-                "arn:aws:glue:*::catalog",
-                "arn:aws:glue:*::*/*",
-                "arn:aws:lakeformation:*::*/*"
-            ]
+            "Resource": "*"
         },
         {
             "Sid": "VisualEditor1",
