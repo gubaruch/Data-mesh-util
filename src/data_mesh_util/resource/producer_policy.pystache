@@ -97,6 +97,15 @@
                 "arn:aws:iam::{{data_mesh_account_id}}:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess",
                 "arn:aws:iam::{{data_mesh_account_id}}:role/AwsDataMesh/DataMeshAdminReadOnly"
             ]
+        },
+        {
+            "Sid": "ProducerPolicy5",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetBucketPolicy",
+                "s3:PutBucketPolicy"
+            ],
+            "Resource": "*"
         }
     ]
 }

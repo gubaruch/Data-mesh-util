@@ -420,13 +420,16 @@ class ApiAutomator:
                 continue
             break
 
+    def _get_s3_path_prefix(self, prefix: str) -> str:
+        return prefix.replace(f"s3://{self._get_bucket_name(prefix)}", "")
+
     def _transform_bucket_policy(self, bucket_policy: dict, principal_account: str,
                                  access_path: str) -> dict:
         use_bucket_name = self._get_bucket_name(access_path)
         policy_sid = f"{BUCKET_POLICY_STATEMENT_SID}-{use_bucket_name}"
 
         # generate a new bucket policy from the template
-        s3_path = "/".join(access_path.split("/")[2:])
+        s3_path = self._get_s3_path_prefix(access_path)
         base_policy = json.loads(utils.generate_policy(template_file='producer_bucket_policy.pystache', config={
             'account_id': principal_account,
             'access_path': s3_path,
