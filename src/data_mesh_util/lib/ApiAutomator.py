@@ -522,7 +522,7 @@ class ApiAutomator:
         get_response = ram_client.get_resource_share_invitations()
 
         for r in get_response.get('resourceShareInvitations'):
-            # only accept lakeformation shares
+            # only accept peding lakeformation shares from the source account
             if r.get('senderAccountId') == sender_account and 'LakeFormation' in r.get('resourceShareName') and r.get(
                     'status') == 'PENDING':
                 if filter_resource_arn is None or r.get('resourceShareArn') == filter_resource_arn:

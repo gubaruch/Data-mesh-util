@@ -126,25 +126,9 @@ class DataMeshConsumer:
             source_account=self._data_mesh_account_id
         )
 
-        self._consumer_automator.lf_grant_permissions(
-            data_mesh_account_id=self._data_mesh_account_id,
-            principal=self._data_producer_account_id,
-            database_name=data_mesh_database_name,
-            permissions=['CREATE_TABLE', 'DESCRIBE', 'DROP'],
-            grantable_permissions=None
-        )
-
         self._consumer_automator.accept_pending_lf_resource_shares(
             sender_account=self._data_mesh_account_id
         )
-
-        # for t in subscription.get(TABLE_NAME):
-        #     self._consumer_automator.create_remote_table(
-        #         data_mesh_account_id=self._data_mesh_account_id,
-        #         database_name=subscription.get(DATABASE_NAME),
-        #         local_table_name=t,
-        #         remote_table_name=t
-        #     )
 
     def list_product_access(self):
         '''
