@@ -270,6 +270,13 @@ class DataMeshAdmin:
             update_role=utils.get_central_role_name(account_id=account_id, type=PRODUCER)
         )
 
+        # add trust to the read only role
+        self._add_trust_relationship(
+            account_id=account_id,
+            trust_role=DATA_MESH_PRODUCER_ROLENAME,
+            update_role=DATA_MESH_READONLY_ROLENAME
+        )
+
     def enable_account_as_consumer(self, account_id: str):
         '''
         Enables a remote account to act as a data consumer by granting them access to the DataMeshAdminConsumer Role
@@ -281,6 +288,13 @@ class DataMeshAdmin:
             account_id=account_id,
             trust_role=DATA_MESH_CONSUMER_ROLENAME,
             update_role=utils.get_central_role_name(account_id=account_id, type=CONSUMER)
+        )
+
+        # add trust to the read only role
+        self._add_trust_relationship(
+            account_id=account_id,
+            trust_role=DATA_MESH_CONSUMER_ROLENAME,
+            update_role=DATA_MESH_READONLY_ROLENAME
         )
 
     def _initialize_account_as(self, type: str):
