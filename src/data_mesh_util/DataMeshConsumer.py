@@ -82,14 +82,11 @@ class DataMeshConsumer:
                                                        region_name=self._current_region,
                                                        log_level=self._log_level)
 
-        if self._current_region is None:
-            raise Exception("Cannot create a Data Mesh Consumer without AWS_REGION environment variable")
-
         self._log_level = log_level
         self._logger.setLevel(log_level)
 
     def request_access_to_product(self, owner_account_id: str, database_name: str,
-                                  request_permissions: list, tables: list = None):
+                                  request_permissions: list, tables: list = None) -> dict:
         '''
         Requests access to a specific data product from the data mesh. Request can be for an entire database, a specific
         table, but is restricted to a single principal. If no principal is provided, grants will be applied to the requesting
@@ -109,7 +106,7 @@ class DataMeshConsumer:
             suppress_object_validation=True
         )
 
-    def finalize_subscription(self, subscription_id: str):
+    def finalize_subscription(self, subscription_id: str) -> None:
         '''
         Finalizes the process of requesting access to a data product. This imports the granted subscription into the consumer's account
         :param subscription_id:
@@ -130,7 +127,10 @@ class DataMeshConsumer:
             sender_account=self._data_mesh_account_id
         )
 
-    def list_product_access(self):
+    def get_subscription(self, request_id: str) -> dict:
+        return self._subscription_tracker.get_subscription(subscription_id=request_id)
+
+    def list_product_access(self) -> dict:
         '''
         Lists active and pending product access grants.
         :return:
@@ -138,8 +138,12 @@ class DataMeshConsumer:
         me = self._sts_client.get_caller_identity().get('Account')
         return self._subscription_tracker.list_subscriptions(owner_id=me)
 
-    def get_subscription(self, request_id: str):
-        return self._subscription_tracker.get_subscription(subscription_id=request_id)
-
     def delete_subscription(self, subscription_id: str, reason: str):
+        '''
+        Soft delete a subscription
+        :param subscription_id:
+        :param reason:
+        :return:
+        '''
+        # TODO implement this method!
         return self._subscription_tracker.delete_subscription(subscription_id=subscription_id, reason=reason)

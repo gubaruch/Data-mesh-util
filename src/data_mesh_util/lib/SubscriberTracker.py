@@ -248,7 +248,7 @@ class SubscriberTracker:
                 return False
 
     def create_subscription_request(self, owner_account_id: str, database_name: str, tables: list, principal: str,
-                                    request_grants: list, suppress_object_validation: bool = False):
+                                    request_grants: list, suppress_object_validation: bool = False) -> dict:
         # look up if there is already a subscription request for this object
         filter = And(Attr(DATABASE_NAME).eq(database_name), Attr(STATUS).eq(STATUS_PENDING))
 
@@ -325,9 +325,7 @@ class SubscriberTracker:
 
             return {TABLE_NAME: tables, SUBSCRIPTION_ID: subscription_id}
 
-        return subscriptions
-
-    def get_subscription(self, subscription_id: str, force: bool = False):
+    def get_subscription(self, subscription_id: str, force: bool = False) -> dict:
         args = {
             "Key": {
                 SUBSCRIPTION_ID: subscription_id
@@ -382,7 +380,7 @@ class SubscriberTracker:
 
     def list_subscriptions(self, owner_id: str = None, principal_id: str = None, database_name: str = None,
                            tables: list = None, includes_grants: list = None, request_status: str = None,
-                           start_token: str = None):
+                           start_token: str = None) -> dict:
         args = {}
 
         def _add_arg(key: str, value):
@@ -418,7 +416,7 @@ class SubscriberTracker:
             response = self._table.scan(**args)
             return self._format_list_response(response)
 
-    def _format_list_response(self, response):
+    def _format_list_response(self, response) -> dict:
         out = {
             'Subscriptions': response.get('Items')
         }
@@ -495,8 +493,8 @@ class SubscriberTracker:
         status_attr = Attr(STATUS)
         expected = None
         if status == STATUS_ACTIVE:
-            expected = Or(Or(status_attr.eq(STATUS_PENDING), status_attr.eq(STATUS_DENIED)),
-                          status_attr.eq(STATUS_DELETED))
+            expected = Or(Or(Or(status_attr.eq(STATUS_PENDING), status_attr.eq(STATUS_DENIED)),
+                             status_attr.eq(STATUS_DELETED)), status_attr.eq(STATUS_ACTIVE))
         elif status == STATUS_DENIED:
             expected = status_attr.eq(STATUS_PENDING)
         elif status == STATUS_DELETED:

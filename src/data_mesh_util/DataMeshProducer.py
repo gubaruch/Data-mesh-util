@@ -425,27 +425,14 @@ class DataMeshProducer:
                 grantable_permissions=grantable_permissions
             )
 
-            # get the permission for the object
-            perm = data_mesh_lf_client.list_permissions(
-                CatalogId=self._data_mesh_account_id,
-                ResourceType='TABLE',
-                Resource={
-                    'Table': {
-                        'CatalogId': self._data_mesh_account_id,
-                        'DatabaseName': subscription.get(DATABASE_NAME),
-                        'Name': t
-                    }
-                }
-            )
+            rs = utils.load_ram_shares(lf_client=data_mesh_lf_client,
+                                       data_mesh_account_id=self._data_mesh_account_id,
+                                       database_name=subscription.get(DATABASE_NAME), table_name=t,
+                                       target_principal=subscription.get(SUBSCRIBER_PRINCIPAL))
+            ram_shares.update(rs)
 
-            if perm is not None:
-                for p in perm.get('PrincipalResourcePermissions'):
-                    if p.get('Principal').get('DataLakePrincipalIdentifier') == subscription.get(
-                            SUBSCRIBER_PRINCIPAL) and 'DESCRIBE' in p.get(
-                        'Permissions'):
-                        ram_shares[t] = p.get('AdditionalDetails').get('ResourceShare')[0]
-            else:
-                raise Exception("Unable to Load RAM Share for Permission")
+            self._logger.info("Subscription RAM Shares")
+            self._logger.info(ram_shares)
 
         # update the subscription to reflect the changes
         return self._subscription_tracker.update_status(
@@ -479,6 +466,9 @@ class DataMeshProducer:
             notes=notes
         )
 
+    def get_subscription(self, request_id: str) -> dict:
+        return self._subscription_tracker.get_subscription(subscription_id=request_id)
+
     def delete_subscription(self, subscription_id: str, reason: str):
         '''
         Soft delete a subscription
@@ -486,4 +476,5 @@ class DataMeshProducer:
         :param reason:
         :return:
         '''
+        # TODO implement this method!
         return self._subscription_tracker.delete_subscription(subscription_id=subscription_id, reason=reason)

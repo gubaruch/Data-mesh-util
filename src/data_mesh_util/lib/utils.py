@@ -133,6 +133,58 @@ def _validate_credentials(credentials) -> dict:
     return out
 
 
+def load_ram_shares(lf_client, data_mesh_account_id: str, database_name: str, table_name: str,
+                    target_principal: str) -> dict:
+    ram_shares = {}
+
+    def _get_ram_share(d: str, t: str = None) -> None:
+        share_ref = None
+        share_type = None
+        # get the permission for the object
+        if t is not None:
+            resource_ref = {
+                'Table': {
+                    'CatalogId': data_mesh_account_id,
+                    'DatabaseName': d,
+                    'Name': t
+                }
+            }
+            share_ref = t
+            share_type = 'Table'
+        else:
+            resource_ref = {
+                'Database': {
+                    'CatalogId': data_mesh_account_id,
+                    'Name': d
+                }
+            }
+            share_ref = d
+            share_type = 'Database'
+
+        perm = lf_client.list_permissions(
+            CatalogId=data_mesh_account_id,
+            ResourceType='TABLE',
+            Resource=resource_ref
+        )
+
+        if perm is not None:
+            for p in perm.get('PrincipalResourcePermissions'):
+                if p.get('Principal').get('DataLakePrincipalIdentifier') == target_principal and 'DESCRIBE' in p.get(
+                        'Permissions'):
+                    ram_shares[share_ref] = {'type': share_type,
+                                             'arn': p.get('AdditionalDetails').get('ResourceShare')[0]}
+        else:
+            raise Exception("Unable to Load RAM Share for Permission")
+
+    # load the RAM shares for the database
+    _get_ram_share(database_name)
+
+    # load the RAM shares for the table
+    _get_ram_share(database_name, table_name)
+
+    return ram_shares
+
+
 def create_session(credentials=None, region=None):
     if credentials is not None:
         use_creds = _validate_credentials(credentials)
