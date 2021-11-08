@@ -375,6 +375,8 @@ class ApiAutomator:
         except glue_client.exceptions.AlreadyExistsException:
             pass
 
+        self._logger.info(f"Verified Database {database_name}")
+
     def set_default_db_permissions(self, database_name: str):
         glue_client = self._get_client('glue')
 
@@ -521,6 +523,7 @@ class ApiAutomator:
 
         get_response = ram_client.get_resource_share_invitations()
 
+        accepted_share = False
         for r in get_response.get('resourceShareInvitations'):
             # only accept peding lakeformation shares from the source account
             if r.get('senderAccountId') == sender_account and 'LakeFormation' in r.get('resourceShareName') and r.get(
@@ -529,4 +532,8 @@ class ApiAutomator:
                     ram_client.accept_resource_share_invitation(
                         resourceShareInvitationArn=r.get('resourceShareInvitationArn')
                     )
+                    accepted_share = True
                     self._logger.info(f"Accepted RAM Share {r.get('resourceShareInvitationArn')}")
+
+        if accepted_share is False:
+            self._logger.info("No Pending RAM Shares to Accept")

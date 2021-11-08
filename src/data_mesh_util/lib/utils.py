@@ -116,10 +116,16 @@ def _validate_credentials(credentials) -> dict:
     if isinstance(credentials, Mapping):
         out = credentials
     else:
-        # treat as a Boto3 Credentials object
-        out = {'AccessKeyId': credentials.access_key, "SecretAccessKey": credentials.secret_key}
-        if credentials.token is not None:
-            out['SessionToken'] = credentials.token
+        if credentials is not None:
+            # treat as a Boto3 Credentials object
+            out = {'AccessKeyId': credentials.access_key, "SecretAccessKey": credentials.secret_key}
+            if credentials.token is not None:
+                out['SessionToken'] = credentials.token
+        else:
+            # load from the environment
+            out = {'AccessKeyId': os.getenv('AWS_ACCESS_KEY'), "SecretAccessKey": os.getenv('AWS_SECRET_ACCESS_KEY')}
+            if credentials.token is not None:
+                out['SessionToken'] = os.getenv('AWS_SESSION_TOKEN')
 
     if out.get('AccessKeyId') is None or out.get('SecretAccessKey') is None:
         raise Exception('Malformed Credentials - missing AccessKeyId or SecretAccessKey')
@@ -136,6 +142,8 @@ def create_session(credentials=None, region=None):
         }
         if region is not None:
             args["region_name"] = region
+        else:
+            args["region_name"] = os.getenv('AWS_REGION')
 
         if 'SessionToken' in use_creds:
             args['aws_session_token'] = use_creds.get('SessionToken')
