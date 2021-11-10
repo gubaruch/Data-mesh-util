@@ -253,6 +253,7 @@ class DataMeshProducer:
     def create_data_products(self, source_database_name: str,
                              create_public_metadata: bool = True,
                              table_name_regex: str = None,
+                             domain: str = None,
                              data_product_name: str = None,
                              sync_mesh_catalog_schedule: str = None,
                              sync_mesh_crawler_role_arn: str = None,
@@ -355,6 +356,14 @@ class DataMeshProducer:
             # propagate lakeformation tags and attach to table
             for tag in table.get('Tags').items():
                 self._mesh_automator.attach_tag(database=data_mesh_database_name, table=table.get('Name'), tag=tag)
+
+            # add the domain tag
+            if domain is not None:
+                self._mesh_automator.attach_tag(
+                    database=data_mesh_database_name,
+                    table=table.get('Name'),
+                    tag=(DOMAIN_TAG_KEY, {'TagValues': [domain], 'ValidValues': [domain]})
+                )
 
             # add the data product tag
             if data_product_name is not None:

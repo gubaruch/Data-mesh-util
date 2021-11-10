@@ -52,6 +52,7 @@ class DataMeshProducerAccountTests(unittest.TestCase):
         self._mgr.create_data_products(
             source_database_name='tpcds',
             table_name_regex='customer',
+            domain=None,
             data_product_name=None,
             create_public_metadata=True
             # sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",

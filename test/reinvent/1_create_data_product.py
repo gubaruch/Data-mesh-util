@@ -42,11 +42,13 @@ class Step1():
     def setUp(self) -> None:
         warnings.filterwarnings("ignore", category=ResourceWarning)
 
-    def create_data_product(self, database_name: str, table_regex: str, data_product_name: str, cron_expr: str,
+    def create_data_product(self, database_name: str, table_regex: str, domain: str, data_product_name: str,
+                            cron_expr: str,
                             crawler_role: str):
         self._mgr.create_data_products(
             source_database_name=database_name,
             table_name_regex=table_regex,
+            domain=domain,
             data_product_name=data_product_name,
             create_public_metadata=True,
             sync_mesh_catalog_schedule=cron_expr,
@@ -60,11 +62,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--database_name', dest='database_name', required=True)
     parser.add_argument('--table_regex', dest='table_regex', required=True)
+    parser.add_argument('--domain', dest='domain', required=False)
     parser.add_argument('--data_product_name', dest='data_product_name', required=False)
     parser.add_argument('--cron_expr', dest='cron_expr', required=False)
     parser.add_argument('--crawler_role', dest='crawler_role', required=False)
 
     args = parser.parse_args()
-    Step1().create_data_product(database_name=args.database_name, table_regex=args.table_regex,
+    Step1().create_data_product(database_name=args.database_name, table_regex=args.table_regex, domain=args.domain,
                                 data_product_name=args.data_product_name, cron_expr=args.cron_expr,
                                 crawler_role=args.crawler_role)
