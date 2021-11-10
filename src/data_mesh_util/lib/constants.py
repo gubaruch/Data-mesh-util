@@ -4,6 +4,7 @@ DEFAULT_TAGS = [
         'Value': 'DataMeshUtils'
     },
 ]
+DATA_PRODUCT_TAG_KEY = 'DataProduct'
 DATA_MESH_MANAGER_ROLENAME = 'DataMeshManager'
 DATA_MESH_ADMIN_PRODUCER_ROLENAME = 'DataMeshAdminProducer'
 DATA_MESH_ADMIN_CONSUMER_ROLENAME = 'DataMeshAdminConsumer'

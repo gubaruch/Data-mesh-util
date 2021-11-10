@@ -83,6 +83,21 @@ class ApiAutomator:
             else:
                 raise e
 
+        # add all missing tag values to valid values (as they must have existed somewhere to be assigned)
+        current_tag_values = lf_client.get_lf_tag(
+            TagKey=tag_key
+        ).get('TagValues')
+        missing_tag_values = []
+        for value in tag_body.get('TagValues'):
+            if value not in current_tag_values:
+                missing_tag_values.append(value)
+
+        if len(missing_tag_values) > 0:
+            lf_client.update_lf_tag(
+                TagKey=tag_key,
+                TagValuesToAdd=missing_tag_values
+            )
+
     def attach_tag(self, database: str, table: str, tag: tuple):
         # create the tag or make sure it already exists
         tag_key = tag[0]

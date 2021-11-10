@@ -52,6 +52,7 @@ class DataMeshProducerAccountTests(unittest.TestCase):
         self._mgr.create_data_products(
             source_database_name='tpcds',
             table_name_regex='customer',
+            data_product_name=None,
             create_public_metadata=True
             # sync_mesh_catalog_schedule="cron(0 */2 * * ? *)",
             # sync_mesh_crawler_role_arn=f"arn:aws:iam::{self._account_ids.get(PRODUCER)}:role/service-role/AWSGlueServiceRole-Crawler"

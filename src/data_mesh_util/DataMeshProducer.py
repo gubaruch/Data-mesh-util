@@ -253,6 +253,7 @@ class DataMeshProducer:
     def create_data_products(self, source_database_name: str,
                              create_public_metadata: bool = True,
                              table_name_regex: str = None,
+                             data_product_name: str = None,
                              sync_mesh_catalog_schedule: str = None,
                              sync_mesh_crawler_role_arn: str = None,
                              expose_data_mesh_db_name: str = None,
@@ -351,9 +352,17 @@ class DataMeshProducer:
                 expose_table_references_with_suffix=expose_table_references_with_suffix
             )
 
-            # create lakeformation tags and attach to table
+            # propagate lakeformation tags and attach to table
             for tag in table.get('Tags').items():
                 self._mesh_automator.attach_tag(database=data_mesh_database_name, table=table.get('Name'), tag=tag)
+
+            # add the data product tag
+            if data_product_name is not None:
+                self._mesh_automator.attach_tag(
+                    database=data_mesh_database_name,
+                    table=table.get('Name'),
+                    tag=(DATA_PRODUCT_TAG_KEY, {'TagValues': [data_product_name], 'ValidValues': [data_product_name]})
+                )
 
             # add a bucket policy entry allowing the data mesh lakeformation service linked role to perform GetObject*
             table_bucket = table_s3_path.split("/")[2]
