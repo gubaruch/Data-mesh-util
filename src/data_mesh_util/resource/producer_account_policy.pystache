@@ -39,7 +39,18 @@
             "Sid": "ProducerAccess4",
             "Effect": "Allow",
             "Action": [
-                "lakeformation:GrantPermissions"
+                "lakeformation:GrantPermissions",
+                "lakeformation:GetResourceLFTags",
+                "lakeformation:GetLFTag"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ProducerAccess5",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetBucketPolicy",
+                "s3:PutBucketPolicy"
             ],
             "Resource": "*"
         }

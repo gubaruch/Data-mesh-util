@@ -96,6 +96,7 @@ class DataMeshProducer:
         rm('CreatedBy')
         rm('IsRegisteredWithLakeFormation')
         rm('CatalogId')
+        rm('Tags')
 
         return t
 
@@ -176,7 +177,7 @@ class DataMeshProducer:
 
             return table_name, link_table_name
 
-    def _load_glue_tables(self, glue_client, catalog_id: str, source_db_name: str, table_name_regex: str):
+    def _load_glue_tables(self, glue_client, lf_client, catalog_id: str, source_db_name: str, table_name_regex: str):
         # get the tables which are included in the set provided through args
         get_tables_args = {
             'CatalogId': catalog_id,
@@ -218,6 +219,32 @@ class DataMeshProducer:
                 all_tables.extend(get_table_response.get('TableList'))
 
         self._logger.info(f"Loaded {len(all_tables)} tables matching {table_name_regex} from Glue")
+
+        # now load all lakeformation tags for the supplied objects
+        for t in all_tables:
+            tags = lf_client.get_resource_lf_tags(
+                CatalogId=catalog_id,
+                Resource={
+                    'Table': {
+                        'CatalogId': catalog_id,
+                        'DatabaseName': t.get('DatabaseName'),
+                        'Name': t.get('Name')
+                    }
+                },
+                ShowAssignedLFTags=True
+            )
+            key = 'LFTagsOnTable'
+            use_tags = {}
+            if tags.get(key) is not None and len(tags.get(key)) > 0:
+                for table_tag in tags.get(key):
+                    # get all the valid values for the tag in LF
+                    lf_tag = lf_client.get_lf_tag(TagKey=table_tag.get('TagKey'))
+                    use_tags[table_tag.get('TagKey')] = {
+                        'TagValues': table_tag.get('TagValues'),
+                        'ValidValues': lf_tag.get('TagValues')
+                    }
+                t['Tags'] = use_tags
+
         return all_tables
 
     def _make_database_name(self, database_name: str):
@@ -237,6 +264,7 @@ class DataMeshProducer:
 
         # create clients for the current account and with the new credentials in the data mesh account
         producer_glue_client = self._session.client('glue', region_name=self._current_region)
+        producer_lf_client = self._session.client('lakeformation', region_name=self._current_region)
         producer_ram_client = self._session.client('ram', region_name=self._current_region)
         data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
                                                       credentials=self._data_mesh_sts_session.get('Credentials'))
@@ -246,6 +274,7 @@ class DataMeshProducer:
         # load the specified tables to be created as data products
         all_tables = self._load_glue_tables(
             glue_client=producer_glue_client,
+            lf_client=producer_lf_client,
             catalog_id=self._data_producer_account_id,
             source_db_name=source_database_name,
             table_name_regex=table_name_regex
@@ -321,6 +350,10 @@ class DataMeshProducer:
                 create_public_metadata=create_public_metadata,
                 expose_table_references_with_suffix=expose_table_references_with_suffix
             )
+
+            # create lakeformation tags and attach to table
+            for tag in table.get('Tags').items():
+                self._mesh_automator.attach_tag(database=data_mesh_database_name, table=table.get('Name'), tag=tag)
 
             # add a bucket policy entry allowing the data mesh lakeformation service linked role to perform GetObject*
             table_bucket = table_s3_path.split("/")[2]

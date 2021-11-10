@@ -53,6 +53,12 @@
                 "lakeformation:GetDataLakeSettings",
                 "lakeformation:GetEffectivePermissionsForPath",
                 "lakeformation:GetDataAccess",
+                "lakeformation:GetResourceLFTags",
+                "lakeformation:AddLFTagsToResource",
+                "lakeformation:GetLFTag",
+                "lakeformation:CreateLFTag",
+                "lakeformation:DeleteLFTag",
+                "lakeformation:UpdateLFTag",
                 "lakeformation:PutDataLakeSettings",
                 "lakeformation:RegisterResource",
                 "lakeformation:UpdateResource"
@@ -97,15 +103,6 @@
                 "arn:aws:iam::{{data_mesh_account_id}}:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess",
                 "arn:aws:iam::{{data_mesh_account_id}}:role/AwsDataMesh/DataMeshAdminReadOnly"
             ]
-        },
-        {
-            "Sid": "ProducerPolicy5",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetBucketPolicy",
-                "s3:PutBucketPolicy"
-            ],
-            "Resource": "*"
         }
     ]
 }

@@ -66,6 +66,50 @@ class ApiAutomator:
 
         self._logger.info("Enabled Account %s to assume %s" % (account_id_to_trust, update_role_name))
 
+    def _validate_tag(self, tag_key: str, tag_body: dict) -> None:
+        lf_client = self._get_client('lakeformation')
+
+        # create the tag or validate it exists
+        try:
+            lf_client.create_lf_tag(
+                TagKey=tag_key,
+                TagValues=tag_body.get('ValidValues')
+            )
+        except lf_client.exceptions.AlreadyExistsException:
+            pass
+        except lf_client.exceptions.InvalidInputException as e:
+            if 'Tag key already exists' in str(e):
+                pass
+            else:
+                raise e
+
+    def attach_tag(self, database: str, table: str, tag: tuple):
+        # create the tag or make sure it already exists
+        tag_key = tag[0]
+        tag_body = tag[1]
+        self._validate_tag(tag_key=tag_key, tag_body=tag_body)
+
+        # attach the tag to the table
+        lf_client = self._get_client('lakeformation')
+        try:
+            args = {
+                "Resource": {
+                    'Table': {
+                        'DatabaseName': database,
+                        'Name': table
+                    }
+                },
+                "LFTags": [
+                    {
+                        'TagKey': tag_key,
+                        'TagValues': tag_body.get('TagValues')
+                    },
+                ]
+            }
+            response = lf_client.add_lf_tags_to_resource(**args)
+        except lf_client.exceptions.AlreadyExistsException:
+            pass
+
     def configure_iam(self, policy_name: str, policy_desc: str, policy_template: str, role_name: str, role_desc: str,
                       account_id: str, data_mesh_account_id: str, config: dict = None,
                       additional_assuming_principals: dict = None, managed_policies_to_attach: list = None):
@@ -215,6 +259,17 @@ class ApiAutomator:
         self._logger.info(f"Validated {policy_name} as {policy_arn}")
 
         return policy_arn
+
+    def leave_ram_shares(self, principal: str, ram_shares: dict) -> None:
+        ram_client = self._get_client('ram')
+
+        for object, share_info in ram_shares.items():
+            ram_client.disassociate_resource_share(
+                resourceShareArn=share_info.get('arn'),
+                principals=[
+                    principal,
+                ]
+            )
 
     def lf_grant_permissions(self, data_mesh_account_id: str, principal: str, database_name: str,
                              table_name: str = None,

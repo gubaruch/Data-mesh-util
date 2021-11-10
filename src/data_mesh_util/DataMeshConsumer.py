@@ -145,5 +145,14 @@ class DataMeshConsumer:
         :param reason:
         :return:
         '''
-        # TODO implement this method!
-        return self._subscription_tracker.delete_subscription(subscription_id=subscription_id, reason=reason)
+        subscription = self._subscription_tracker.get_subscription(subscription_id=subscription_id)
+
+        # confirm that we are calling from the same account as the subscriber principal
+        if subscription.get(SUBSCRIBER_PRINCIPAL) != self._current_account.get('Account'):
+            raise Exception("Cannot delete permissions which you do not own")
+        else:
+            # leave the ram shares
+            self._consumer_automator.leave_ram_shares(principal=subscription.get(SUBSCRIBER_PRINCIPAL),
+                                                      ram_shares=subscription.get(RAM_SHARES))
+
+            return self._subscription_tracker.delete_subscription(subscription_id=subscription_id, reason=reason)

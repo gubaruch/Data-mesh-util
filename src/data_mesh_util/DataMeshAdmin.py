@@ -157,7 +157,7 @@ class DataMeshAdmin:
         producer_tuple = self._automator.configure_iam(
             policy_name=f'DataMeshProducerPolicy-{account_id}',
             policy_desc=f'IAM Role enabling Account {account_id} to become a Data Producer',
-            policy_template="producer_policy.pystache",
+            policy_template="producer_mesh_policy.pystache",
             role_name=utils.get_central_role_name(account_id=account_id, type=PRODUCER),
             role_desc=f'Role to be used for Data Mesh Producer {account_id}',
             account_id=self._data_mesh_account_id,
@@ -196,7 +196,7 @@ class DataMeshAdmin:
         return self._automator.configure_iam(
             policy_name=f'DataMeshConsumerPolicy-{account_id}',
             policy_desc=f'IAM Role enabling Account {account_id} to become Data Consumers',
-            policy_template="consumer_policy.pystache",
+            policy_template="consumer_mesh_policy.pystache",
             role_name=utils.get_central_role_name(account_id=account_id, type=CONSUMER),
             role_desc=f'Role to be used for Data Mesh Consumer {account_id}',
             account_id=self._data_mesh_account_id,
@@ -320,14 +320,14 @@ class DataMeshAdmin:
             local_role_name = DATA_MESH_CONSUMER_ROLENAME
             remote_role_name = f"{DATA_MESH_ADMIN_CONSUMER_ROLENAME}-{source_account}"
             policy_name = CONSUMER_POLICY_NAME
-            policy_template = "consumer_policy.pystache"
+            policy_template = "consumer_account_policy.pystache"
             target_account = self._data_consumer_account_id
         else:
             self._data_producer_account_id = source_account
             local_role_name = DATA_MESH_PRODUCER_ROLENAME
             remote_role_name = f"{DATA_MESH_ADMIN_PRODUCER_ROLENAME}-{source_account}"
             policy_name = PRODUCER_POLICY_NAME
-            policy_template = "producer_access_catalog.pystache"
+            policy_template = "producer_account_policy.pystache"
             target_account = self._data_producer_account_id
 
         self._logger.info(f"Setting up Account {source_account} as a Data {type}")
