@@ -354,8 +354,9 @@ class DataMeshProducer:
             )
 
             # propagate lakeformation tags and attach to table
-            for tag in table.get('Tags').items():
-                self._mesh_automator.attach_tag(database=data_mesh_database_name, table=table.get('Name'), tag=tag)
+            if 'Tags' in table:
+                for tag in table.get('Tags').items():
+                    self._mesh_automator.attach_tag(database=data_mesh_database_name, table=table.get('Name'), tag=tag)
 
             # add the domain tag
             if domain is not None:
