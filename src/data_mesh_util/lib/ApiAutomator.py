@@ -192,39 +192,58 @@ class ApiAutomator:
         role_arn = None
 
         self._logger.debug("Waiting for User to be ready for inclusion in AssumeRolePolicy")
-        time.sleep(5)
 
-        try:
-            # now create the IAM Role with a trust policy to the indicated principal and the root user
-            aws_principals = [user_arn, ("arn:aws:iam::%s:root" % account_id)]
-            iam_client.create_role(
-                Path=DATA_MESH_IAM_PATH,
-                RoleName=role_name,
-                AssumeRolePolicyDocument=json.dumps(
-                    utils.create_assume_role_doc(aws_principals=aws_principals,
-                                                 additional_principals=additional_assuming_principals)),
-                Description=role_desc,
-                Tags=DEFAULT_TAGS
-            )
-            # wait for role active
-            waiter = iam_client.get_waiter('role_exists')
-            waiter.wait(RoleName=role_name)
+        role_created = False
+        retries = 0
+        while role_created is False and retries < 5:
+            try:
+                # now create the IAM Role with a trust policy to the indicated principal and the root user
+                aws_principals = [user_arn, ("arn:aws:iam::%s:root" % account_id)]
+                iam_client.create_role(
+                    Path=DATA_MESH_IAM_PATH,
+                    RoleName=role_name,
+                    AssumeRolePolicyDocument=json.dumps(
+                        utils.create_assume_role_doc(aws_principals=aws_principals,
+                                                     additional_principals=additional_assuming_principals)),
+                    Description=role_desc,
+                    Tags=DEFAULT_TAGS
+                )
+                # wait for role active
+                waiter = iam_client.get_waiter('role_exists')
+                waiter.wait(RoleName=role_name)
+                role_created = True
 
-            role_arn = utils.get_role_arn(account_id, role_name)
-        except iam_client.exceptions.EntityAlreadyExistsException:
-            role_arn = iam_client.get_role(RoleName=role_name).get(
-                'Role').get('Arn')
+                role_arn = utils.get_role_arn(account_id, role_name)
+            except iam_client.exceptions.EntityAlreadyExistsException:
+                role_arn = iam_client.get_role(RoleName=role_name).get(
+                    'Role').get('Arn')
+                role_created = True
+            except iam_client.exceptions.MalformedPolicyDocumentException as mpde:
+                if "Invalid principal" in str(mpde):
+                    # this is raised when something within IAM hasn't yet propagated correctly. Boto waiters
+                    # don't seem to catch it, so we have to inject a manual sleep/retry
+                    time.sleep(2)
+                    retries += 1
 
         self._logger.info(f"Validated Role {role_name} as {role_arn}")
         self._logger.debug("Waiting for Role to be ready for Policy Attach")
-        time.sleep(5)
 
         # attach the created policy to the role
-        iam_client.attach_role_policy(
-            RoleName=role_name,
-            PolicyArn=policy_arn
-        )
-        self._logger.info(f"Attached Policy {policy_arn} to {role_name}")
+        policy_attached = False
+        retries = 0
+        while policy_attached is False and retries < 5:
+            try:
+                iam_client.attach_role_policy(
+                    RoleName=role_name,
+                    PolicyArn=policy_arn
+                )
+                policy_attached = True
+                self._logger.info(f"Attached Policy {policy_arn} to {role_name}")
+            except iam_client.exceptions.MalformedPolicyDocumentException as mpde:
+                if "Invalid principal" in str(mpde):
+                    # this is raised when something within IAM hasn't yet propagated correctly.
+                    time.sleep(2)
+                    retries += 1
 
         # attach the indicated managed policies
         if managed_policies_to_attach:
@@ -285,6 +304,20 @@ class ApiAutomator:
                     principal,
                 ]
             )
+
+    def lf_grant_create_db(self, iam_role_arn: str):
+        # grant this role the ability to create databases and tables
+        lf_client = self._get_client('lakeformation')
+        lf_client.grant_permissions(
+            Principal={
+                'DataLakePrincipalIdentifier': iam_role_arn
+            },
+            Resource={'Catalog': {}},
+            Permissions=[
+                'CREATE_DATABASE'
+            ]
+        )
+        self._logger.info(f"Granted {iam_role_arn} CREATE_DATABASE privileges on Catalog")
 
     def lf_grant_permissions(self, data_mesh_account_id: str, principal: str, database_name: str,
                              table_name: str = None,

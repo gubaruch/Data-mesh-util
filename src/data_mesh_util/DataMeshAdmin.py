@@ -62,6 +62,8 @@ class DataMeshAdmin:
         self._automator = ApiAutomator(target_account=data_mesh_account_id, session=self._session,
                                        log_level=self._log_level)
 
+        self._logger.debug("Running as %s" % str(self._sts_client.get_caller_identity()))
+
     def _create_template_config(self, config: dict):
         if config is None:
             config = {}
@@ -89,7 +91,6 @@ class DataMeshAdmin:
         self._create_template_config(self._config)
 
         current_identity = self._sts_client.get_caller_identity()
-        self._logger.debug("Running as %s" % str(current_identity))
 
         ro_tuple = self._automator.configure_iam(
             policy_name='DataMeshReadOnlyPolicy',
@@ -114,7 +115,6 @@ class DataMeshAdmin:
         self._create_template_config(self._config)
 
         current_identity = self._sts_client.get_caller_identity()
-        self._logger.debug("Running as %s" % str(current_identity))
 
         mgr_tuple = self._automator.configure_iam(
             policy_name='DataMeshManagerPolicy',
@@ -140,9 +140,7 @@ class DataMeshAdmin:
         self._automator.add_datalake_admin(principal=executing_user_role)
         self._automator.set_default_lf_permissions()
 
-        self._logger.info(
-            "Removed default data lake settings for Account %s. New Admins are %s and Data Mesh Manager" % (
-                current_identity.get('Account'), executing_user_role))
+        self._logger.info(f"New Admins are {current_identity.get('Account')} and {executing_user_role}")
 
         return mgr_tuple
 
@@ -164,24 +162,13 @@ class DataMeshAdmin:
             data_mesh_account_id=self._data_mesh_account_id,
             config=self._config)
         producer_iam_role_arn = producer_tuple[0]
-
         self._logger.info("Validated Data Mesh Producer Role %s" % producer_iam_role_arn)
 
-        # grant this role the ability to create databases and tables
-        response = self._lf_client.grant_permissions(
-            Principal={
-                'DataLakePrincipalIdentifier': producer_iam_role_arn
-            },
-            Resource={'Catalog': {}},
-            Permissions=[
-                'CREATE_DATABASE'
-            ]
-        )
+        self._automator.lf_grant_create_db(iam_role_arn=producer_iam_role_arn)
 
         # make the iam role a data lake admin
         self._automator.add_datalake_admin(principal=producer_iam_role_arn)
-
-        self._logger.info("Granted Data Mesh Producer CREATE_DATABASE privileges on Catalog")
+        self._logger.info(f"Granted {producer_iam_role_arn} Data Lake Admin")
 
         return producer_tuple
 
@@ -389,6 +376,9 @@ class DataMeshAdmin:
                 raise iie
         except self._iam_client.exceptions.AlreadyExistsException:
             pass
+
+        # allow the local role to create databases, if they don't have it already
+        self._automator.lf_grant_create_db(iam_role_arn=local_role_arn)
 
         return iam_details
 
