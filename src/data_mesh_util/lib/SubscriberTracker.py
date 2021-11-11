@@ -247,10 +247,17 @@ class SubscriberTracker:
                 # if we get access denied here, it's because the object doesn't exist
                 return False
 
-    def create_subscription_request(self, owner_account_id: str, database_name: str, tables: list, principal: str,
-                                    request_grants: list, suppress_object_validation: bool = False) -> dict:
+    def create_subscription_request(self, owner_account_id: str, principal: str,
+                                    request_grants: list, domain=None, data_product_name=None,
+                                    database_name: str = None, tables: list = None,
+                                    suppress_object_validation: bool = False) -> dict:
         # look up if there is already a subscription request for this object
-        filter = And(Attr(DATABASE_NAME).eq(database_name), Attr(STATUS).eq(STATUS_PENDING))
+        if database_name is not None:
+            filter = And(Attr(DATABASE_NAME).eq(database_name), Attr(STATUS).eq(STATUS_PENDING))
+        elif data_product_name is not None:
+            filter = And(Attr(DATA_PRODUCT_TAG_KEY).eq(data_product_name), Attr(STATUS).eq(STATUS_PENDING))
+        elif domain is not None:
+            filter = And(Attr(DOMAIN_TAG_KEY).eq(domain), Attr(STATUS).eq(STATUS_PENDING))
 
         def _sub_exists():
             found = self._table.query(
@@ -275,7 +282,18 @@ class SubscriberTracker:
                 Item=item
             )
 
-        if tables is None:
+        subscription_type = None
+        # resolve the type of subscription being requested
+        if database_name is not None and tables is not None:
+            subscription_type = 'table'
+        elif database_name is not None and tables is None:
+            subscription_type = 'database'
+        elif domain is None and data_product_name is not None:
+            subscription_type = 'data product'
+        else:
+            subscription_type = 'domain'
+
+        if subscription_type = 'database':
             # validate that the database exists
             exists = self._validate_object(database_name=database_name,
                                            suppress_object_validation=suppress_object_validation)
@@ -301,7 +319,7 @@ class SubscriberTracker:
                     DATABASE_NAME: database_name,
                     SUBSCRIPTION_ID: sub_id
                 }
-        else:
+        elif subscription_type == 'table':
             # validate the table list
             self._validate_objects(database_name=database_name, tables=tables,
                                    suppress_object_validation=suppress_object_validation)
@@ -324,6 +342,14 @@ class SubscriberTracker:
             _create_subscription(item=item, principal=principal)
 
             return {TABLE_NAME: tables, SUBSCRIPTION_ID: subscription_id}
+        elif subscription_type == 'domain':
+            # validate that any objects exist tagged with the requested domain
+            pass
+        else:
+            # validate that any objects exist tagged with the data product name
+            pass
+
+
 
     def get_subscription(self, subscription_id: str, force: bool = False) -> dict:
         args = {

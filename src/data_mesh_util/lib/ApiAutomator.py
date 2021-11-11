@@ -192,7 +192,7 @@ class ApiAutomator:
         role_arn = None
 
         self._logger.debug("Waiting for User to be ready for inclusion in AssumeRolePolicy")
-        time.sleep(1)
+        time.sleep(5)
 
         try:
             # now create the IAM Role with a trust policy to the indicated principal and the root user
