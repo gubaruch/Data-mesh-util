@@ -293,7 +293,7 @@ class SubscriberTracker:
         else:
             subscription_type = 'domain'
 
-        if subscription_type = 'database':
+        if subscription_type == 'database':
             # validate that the database exists
             exists = self._validate_object(database_name=database_name,
                                            suppress_object_validation=suppress_object_validation)
