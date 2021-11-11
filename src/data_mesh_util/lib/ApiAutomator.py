@@ -217,7 +217,7 @@ class ApiAutomator:
 
         self._logger.info(f"Validated Role {role_name} as {role_arn}")
         self._logger.debug("Waiting for Role to be ready for Policy Attach")
-        time.sleep(1)
+        time.sleep(5)
 
         # attach the created policy to the role
         iam_client.attach_role_policy(
