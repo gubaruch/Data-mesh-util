@@ -146,7 +146,7 @@ mesh_admin = dmu.DataMeshAdmin(
 mesh_admin.initialize_mesh_account()
 ```
 
-# Step 2 - Enable an AWS Account as a Producer
+### Step 2 - Enable an AWS Account as a Producer
 
 You must configure an account to act as a Producer in order to offer data shares to other accounts. This is an
 administrative task that is run once per AWS Account. The configured credentials must have AdministratorAccess as well
@@ -182,11 +182,55 @@ mesh_macros = data_mesh_macros.DataMeshMacros(
     log_level=logging.DEBUG
 )
 
-# create the producer account
+# configure the producer account
 mesh_macros.bootstrap_account(
     account_type=PRODUCER,
     mesh_credentials=mesh_credentials,
     account_credentials=producer_credentials
+)
+```
+
+### Step 3: Enable an AWS Account as a Consumer
+
+Accounts can be both producers and consumers, so you may wish to run this step against the account used above. You may
+also have Accounts that are Consumer only, and cannot create data shares. This step is only run once per AWS Account
+and must be run using credentials that have AdministratorAccess as well as being Lake Formation Data Lake Admin:
+
+```python
+import logging
+from data_mesh_util.lib.constants import *
+from data_mesh_util import DataMeshMacros as data_mesh_macros
+
+'''
+Script to configure an set of accounts as central data mesh. Mesh credentials must have AdministratorAccess and Data Lake Admin permissions.
+'''
+
+data_mesh_account = 'insert data mesh account number here
+aws_region = 'insert the AWS Region you want to install into'
+mesh_credentials = {
+    "AccessKeyId": "your access key",
+    "SecretAccessKey": "your secret key",
+    "SessionToken": "optional - a session token, if you are using an IAM Role & temporary credentials"
+}
+consumer_credentials = {
+    "AccountId": "the target AWS Account ID",
+    "AccessKeyId": "your access key",
+    "SecretAccessKey": "your secret key",
+    "SessionToken": "optional - a session token, if you are using an IAM Role & temporary credentials"
+}
+
+# create a macro handler which works across accounts
+mesh_macros = data_mesh_macros.DataMeshMacros(
+    data_mesh_account_id=data_mesh_account,
+    region_name=aws_region,
+    log_level=logging.DEBUG
+)
+
+# configure the consumer account
+mesh_macros.bootstrap_account(
+    account_type=CONSUMER,
+    mesh_credentials=mesh_credentials,
+    account_credentials=consumer_credentials
 )
 ```
 
