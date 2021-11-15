@@ -6,6 +6,7 @@ class DataMeshMacros:
     _data_mesh_account_id = None
     _region = None
     _log_level = None
+    _BOTH = 'Both'
 
     def __init__(self, data_mesh_account_id: str, region_name: str, log_level: str):
         self._data_mesh_account_id = data_mesh_account_id
@@ -29,9 +30,9 @@ class DataMeshMacros:
             use_creds=account_credentials
         )
 
-        if account_type == PRODUCER:
+        if account_type == PRODUCER or account_type.lower() == self._BOTH.lower():
             account_admin.initialize_producer_account()
             mesh_admin.enable_account_as_producer(account_credentials.get('AccountId'))
-        elif account_type == CONSUMER:
+        elif account_type == CONSUMER or account_type.lower() == self._BOTH.lower():
             account_admin.initialize_consumer_account()
             mesh_admin.enable_account_as_consumer(account_credentials.get('AccountId'))

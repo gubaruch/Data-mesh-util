@@ -29,7 +29,7 @@ class DataMeshProducer:
     _data_mesh_sts_session = None
     _data_mesh_boto_session = None
     _subscription_tracker = None
-    _current_account = None
+    _data_producer_identity = None
     _producer_automator = None
     _mesh_automator = None
 
@@ -41,10 +41,26 @@ class DataMeshProducer:
         else:
             self._current_region = region_name
 
-        if use_credentials is not None:
-            self._session = utils.create_session(credentials=use_credentials, region=self._current_region)
+        # Assume the producer account DataMeshProducer role, unless we have been supplied temporary credentials for that role
+        # bind the test class into the producer account
+        _sts_client = utils.generate_client('sts', region_name, use_credentials)
+        _current_identity = _sts_client.get_caller_identity()
+        set_credentials = None
+        if _current_identity.get('Arn') == utils.get_role_arn(account_id=_current_identity.get('Account'),
+                                                              role_name=DATA_MESH_PRODUCER_ROLENAME):
+            set_credentials = use_credentials
         else:
+            _sts_session = _sts_client.assume_role(
+                RoleArn=utils.get_role_arn(_current_identity.get('Account'), DATA_MESH_PRODUCER_ROLENAME),
+                RoleSessionName=utils.make_iam_session_name(_current_identity)
+            )
+
+            set_credentials = _sts_session.get('Credentials')
+
+        if use_credentials is None:
             self._session = boto3.session.Session(region_name=self._current_region)
+        else:
+            self._session = utils.create_session(credentials=set_credentials, region=self._current_region)
 
         self._iam_client = self._session.client('iam')
         self._sts_client = self._session.client('sts')
@@ -52,28 +68,30 @@ class DataMeshProducer:
         self._log_level = log_level
         self._logger.setLevel(log_level)
 
-        self._current_account = self._session.client('sts').get_caller_identity()
-        self._data_producer_account_id = self._current_account.get('Account')
+        # now assume the DataMeshProducer-<account-id> Role in the Mesh Account
+        self._data_producer_identity = self._session.client('sts').get_caller_identity()
+        self._data_producer_account_id = self._data_producer_identity.get('Account')
         self._producer_automator = ApiAutomator(target_account=self._data_producer_account_id,
                                                 session=self._session, log_level=self._log_level)
 
-        session_name = utils.make_iam_session_name(self._current_account)
+        session_name = utils.make_iam_session_name(self._data_producer_identity)
         self._data_producer_role_arn = utils.get_datamesh_producer_role_arn(
-            source_account_id=self._current_account.get('Account'),
-            data_mesh_account_id=data_mesh_account_id
+            source_account_id=self._data_producer_account_id,
+            data_mesh_account_id=self._data_mesh_account_id
         )
         self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_producer_role_arn,
                                                                    RoleSessionName=session_name)
         self._data_mesh_boto_session = utils.create_session(credentials=self._data_mesh_sts_session.get('Credentials'),
                                                             region=self._current_region)
+        # validate that we are running in the data mesh account
+        utils.validate_correct_account(self._data_mesh_sts_session.get('Credentials'), self._data_mesh_account_id)
+
+        # generate an API Automator in the mesh
         self._mesh_automator = ApiAutomator(target_account=self._data_mesh_account_id,
                                             session=self._data_mesh_boto_session, log_level=self._log_level)
 
         self._logger.debug("Created new STS Session for Data Mesh Admin Producer")
         self._logger.debug(self._data_mesh_sts_session)
-
-        # validate that we are running in the data mesh account
-        utils.validate_correct_account(self._data_mesh_sts_session.get('Credentials'), self._data_mesh_account_id)
 
         self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_sts_session.get('Credentials'),
                                                        data_mesh_account_id=data_mesh_account_id,
@@ -248,7 +266,7 @@ class DataMeshProducer:
         return all_tables
 
     def _make_database_name(self, database_name: str):
-        return "%s-%s" % (database_name, self._current_account.get('Account'))
+        return "%s-%s" % (database_name, self._data_producer_identity.get('Account'))
 
     def create_data_products(self, source_database_name: str,
                              create_public_metadata: bool = True,

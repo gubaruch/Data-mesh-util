@@ -234,5 +234,30 @@ mesh_macros.bootstrap_account(
 )
 ```
 
+The above Steps 2 and 3 can be run for any number of accounts that you require to act as Producers or Consumers. If you
+want to provision an account as both Producer _and_ Consumer, then use `account_type='both'` in the above call to `bootstrap_account()`.
+
+### Step 4: Create a Data Product
+
+Creating a data product replicates Glue Catalog metadata from the Producer's account into the Data Mesh account, while
+leaving the source storage at rest within the Producer. The data mesh objects are shared back to the Producer account
+to enable local control without accessing the data mesh. Data Products can be created from Glue Catalog Databases or
+one-or-more Tables, but all permissions are managed at Table level. To create a data product:
+
+```python
+
+        self._mgr.create_data_products(
+            source_database_name=database_name,
+            table_name_regex=table_regex,
+            domain=domain,
+            data_product_name=data_product_name,
+            create_public_metadata=True,
+            sync_mesh_catalog_schedule=cron_expr,
+            sync_mesh_crawler_role_arn=crawler_role,
+            expose_data_mesh_db_name=None,
+            expose_table_references_with_suffix=None
+        )
+```
+
 ---
 Amazon Web Services, 2021 All rights reserved.

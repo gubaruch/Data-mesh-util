@@ -29,17 +29,10 @@ class DataMeshProducerAccountTests(unittest.TestCase):
     '''
     _region, _clients, _account_ids, _creds = test_utils.load_client_info_from_file()
 
-    # bind the test class into the producer account
-    _sts_session = test_utils.assume_source_role(sts_client=_clients.get(PRODUCER),
-                                                 account_id=_account_ids.get(PRODUCER),
-                                                 type=PRODUCER)
-    producer_credentials = _sts_session.get('Credentials')
-    _sts_client = utils.generate_client('sts', _region, _sts_session.get('Credentials'))
-
     _mgr = dmp.DataMeshProducer(data_mesh_account_id=_account_ids.get(MESH),
                                 log_level=logging.DEBUG,
                                 region_name=_region,
-                                use_credentials=producer_credentials)
+                                use_credentials=_creds.get(PRODUCER))
     _subscription_tracker = SubscriberTracker(data_mesh_account_id=_account_ids.get(MESH),
                                               credentials=_creds.get(MESH),
                                               region_name=_region,
