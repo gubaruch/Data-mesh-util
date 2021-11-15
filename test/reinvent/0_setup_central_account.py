@@ -9,9 +9,11 @@ sys.path.insert(0, two_up)
 
 import test.test_utils as test_utils
 from data_mesh_util.lib.constants import *
-from data_mesh_util import DataMeshAdmin as dmu
+from data_mesh_util import DataMeshAdmin as data_mesh_admin
+from data_mesh_util import DataMeshMacros as data_mesh_macros
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
+
 
 class Step0():
     '''
@@ -26,21 +28,25 @@ class Step0():
 
     def setup_central_account(self):
         # create the data mesh
-        mesh_admin = dmu.DataMeshAdmin(data_mesh_account_id=self._account_ids.get(MESH), region_name=self._region,
-                                       log_level=logging.DEBUG, use_creds=self._creds.get(MESH))
+        mesh_admin = data_mesh_admin.DataMeshAdmin(data_mesh_account_id=self._account_ids.get(MESH),
+                                                   region_name=self._region,
+                                                   log_level=logging.DEBUG, use_creds=self._creds.get(MESH))
         mesh_admin.initialize_mesh_account()
 
+        # create a macro handler which works across accounts
+        mesh_macros = data_mesh_macros.DataMeshMacros(data_mesh_account_id=self._account_ids.get(MESH),
+                                                      region_name=self._region,
+                                                      log_level=logging.DEBUG)
+
         # create the producer account
-        producer_admin = dmu.DataMeshAdmin(data_mesh_account_id=self._account_ids.get(MESH), region_name=self._region,
-                                           log_level=logging.DEBUG, use_creds=self._creds.get(PRODUCER_ADMIN))
-        producer_admin.initialize_producer_account()
-        mesh_admin.enable_account_as_producer(self._account_ids.get(PRODUCER))
+        mesh_macros.bootstrap_account(account_type=PRODUCER,
+                                      mesh_credentials=self._creds.get(MESH),
+                                      account_credentials=self._creds.get(PRODUCER_ADMIN))
 
         # create the consumer_account
-        consumer_admin = dmu.DataMeshAdmin(data_mesh_account_id=self._account_ids.get(MESH), region_name=self._region,
-                                           log_level=logging.DEBUG, use_creds=self._creds.get(CONSUMER_ADMIN))
-        consumer_admin.initialize_consumer_account()
-        mesh_admin.enable_account_as_consumer(self._account_ids.get(CONSUMER))
+        mesh_macros.bootstrap_account(account_type=CONSUMER,
+                                      mesh_credentials=self._creds.get(MESH),
+                                      account_credentials=self._creds.get(CONSUMER_ADMIN))
 
 
 if __name__ == '__main__':

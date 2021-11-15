@@ -74,6 +74,43 @@ This functionality is presented to customers as a Python library to allow maximu
 	* `resource` - Pystache templates used to generate IAM policies
 * `test` - Integration tests of functionality
 
+## Getting Started
+
+To get started with Data Mesh Utils, you must first configure an AWS Account to act as the data mesh account. We recommend one data mesh account per AWS Region, keeping regional
+catalogs separated to support data residency requirements. However, you may choose to only have a single data mesh account for your entire business.
+
+### Step 1 - Install the Data Mesh
+
+Installing the Data Mesh Utility functions must be run as 1/an AWS Administrative account, which 2/has Lake Formation Data Lake Admin permissions granted. When completed, run the
+Data Mesh Installer with:
+
+```python
+import logging
+from data_mesh_util.lib.constants import *
+from data_mesh_util import DataMeshAdmin as dmu
+
+'''
+Script to configure an set of accounts as central data mesh. Mesh credentials must have AdministratorAccess and Data Lake Admin permissions.
+'''
+
+data_mesh_account = 'insert data mesh account number here
+aws_region = 'insert the AWS Region you want to install into'
+credentials = {
+  "AccessKeyId": "your access key",
+  "SecretAccessKey": "your secret key",
+  "SessionToken": "optional - a session token, if you are using an IAM Role & temporary credentials"
+} 
+
+# create the data mesh
+mesh_admin = dmu.DataMeshAdmin(
+  data_mesh_account_id=data_mesh_account, 
+  region_name=aws_region,
+  log_level=logging.DEBUG, 
+  use_creds=credentials
+)
+mesh_admin.initialize_mesh_account()
+```
+
 ---
 Amazon Web Services, 2021
 All rights reserved.
