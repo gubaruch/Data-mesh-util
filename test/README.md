@@ -58,3 +58,8 @@ enabling Access Keys for the created `DataMeshProducer` and `DataMeshConsumer` s
 Please note that `Mesh`, `ProducerAdmin`, and `ConsumerAdmin` must all be assigned Data Lake Admin permissions in Lake Formation. This permissions
 Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the
 AWS Console in the Account you wish to configure.
+
+In the AWS Console, choose the Lake Formation service, and then in the left-hand Nav choose Permissions/Administrative Roles & Tasks. Add the User or Role
+configured above as data lake administrator:
+
+![data lake admin](data-lake-admin.png)
