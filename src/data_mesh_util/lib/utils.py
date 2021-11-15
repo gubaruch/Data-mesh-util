@@ -111,6 +111,24 @@ def get_datamesh_consumer_role_arn(source_account_id: str, data_mesh_account_id:
     return get_role_arn(data_mesh_account_id, get_central_role_name(source_account_id, CONSUMER))
 
 
+def assume_iam_role(role_name: str, region_name: str, target_account: str = None,
+                    use_credentials=None) -> (boto3.session.Session, dict):
+    _sts_client = generate_client('sts', region_name, use_credentials)
+    _current_identity = _sts_client.get_caller_identity()
+    set_account = target_account if target_account is not None else _current_identity.get('Account')
+
+    if _current_identity.get('Arn') == get_role_arn(account_id=set_account,
+                                                    role_name=role_name):
+        return boto3.session.Session(region_name=region_name)
+    else:
+        _creds = _sts_client.assume_role(
+            RoleArn=get_role_arn(set_account, role_name),
+            RoleSessionName=make_iam_session_name(_current_identity)
+        )
+
+        return create_session(credentials=_creds.get('Credentials'), region=region_name), _creds.get('Credentials')
+
+
 def _validate_credentials(credentials) -> dict:
     out = {}
     if isinstance(credentials, Mapping):

@@ -26,7 +26,7 @@ class DataMeshProducer:
     _logger.addHandler(stream_handler)
     _data_mesh_account_id = None
     _data_producer_role_arn = None
-    _data_mesh_sts_session = None
+    _data_mesh_credentials = None
     _data_mesh_boto_session = None
     _subscription_tracker = None
     _data_producer_identity = None
@@ -43,24 +43,9 @@ class DataMeshProducer:
 
         # Assume the producer account DataMeshProducer role, unless we have been supplied temporary credentials for that role
         # bind the test class into the producer account
-        _sts_client = utils.generate_client('sts', region_name, use_credentials)
-        _current_identity = _sts_client.get_caller_identity()
-        set_credentials = None
-        if _current_identity.get('Arn') == utils.get_role_arn(account_id=_current_identity.get('Account'),
-                                                              role_name=DATA_MESH_PRODUCER_ROLENAME):
-            set_credentials = use_credentials
-        else:
-            _sts_session = _sts_client.assume_role(
-                RoleArn=utils.get_role_arn(_current_identity.get('Account'), DATA_MESH_PRODUCER_ROLENAME),
-                RoleSessionName=utils.make_iam_session_name(_current_identity)
-            )
-
-            set_credentials = _sts_session.get('Credentials')
-
-        if use_credentials is None:
-            self._session = boto3.session.Session(region_name=self._current_region)
-        else:
-            self._session = utils.create_session(credentials=set_credentials, region=self._current_region)
+        self._session, _producer_credentials = utils.assume_iam_role(role_name=DATA_MESH_PRODUCER_ROLENAME,
+                                                                     region_name=self._current_region,
+                                                                     use_credentials=use_credentials)
 
         self._iam_client = self._session.client('iam')
         self._sts_client = self._session.client('sts')
@@ -68,32 +53,31 @@ class DataMeshProducer:
         self._log_level = log_level
         self._logger.setLevel(log_level)
 
-        # now assume the DataMeshProducer-<account-id> Role in the Mesh Account
-        self._data_producer_identity = self._session.client('sts').get_caller_identity()
+        self._data_producer_identity = self._sts_client.get_caller_identity()
         self._data_producer_account_id = self._data_producer_identity.get('Account')
+
         self._producer_automator = ApiAutomator(target_account=self._data_producer_account_id,
                                                 session=self._session, log_level=self._log_level)
 
-        session_name = utils.make_iam_session_name(self._data_producer_identity)
-        self._data_producer_role_arn = utils.get_datamesh_producer_role_arn(
-            source_account_id=self._data_producer_account_id,
-            data_mesh_account_id=self._data_mesh_account_id
+        # now assume the DataMeshProducer-<account-id> Role in the Mesh Account
+        self._data_mesh_session, self._data_mesh_credentials = utils.assume_iam_role(
+            role_name=utils.get_central_role_name(self._data_producer_account_id, PRODUCER),
+            region_name=self._current_region,
+            use_credentials=_producer_credentials,
+            target_account=self._data_mesh_account_id
         )
-        self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_producer_role_arn,
-                                                                   RoleSessionName=session_name)
-        self._data_mesh_boto_session = utils.create_session(credentials=self._data_mesh_sts_session.get('Credentials'),
-                                                            region=self._current_region)
+
         # validate that we are running in the data mesh account
-        utils.validate_correct_account(self._data_mesh_sts_session.get('Credentials'), self._data_mesh_account_id)
+        utils.validate_correct_account(self._data_mesh_credentials, self._data_mesh_account_id)
 
         # generate an API Automator in the mesh
         self._mesh_automator = ApiAutomator(target_account=self._data_mesh_account_id,
-                                            session=self._data_mesh_boto_session, log_level=self._log_level)
+                                            session=self._data_mesh_session, log_level=self._log_level)
 
         self._logger.debug("Created new STS Session for Data Mesh Admin Producer")
-        self._logger.debug(self._data_mesh_sts_session)
+        self._logger.debug(self._data_mesh_credentials)
 
-        self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_sts_session.get('Credentials'),
+        self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_credentials,
                                                        data_mesh_account_id=data_mesh_account_id,
                                                        region_name=self._current_region,
                                                        log_level=log_level)
@@ -289,9 +273,9 @@ class DataMeshProducer:
         producer_lf_client = self._session.client('lakeformation', region_name=self._current_region)
         producer_ram_client = self._session.client('ram', region_name=self._current_region)
         data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
-                                                      credentials=self._data_mesh_sts_session.get('Credentials'))
+                                                      credentials=self._data_mesh_credentials)
         data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
-                                                    credentials=self._data_mesh_sts_session.get('Credentials'))
+                                                    credentials=self._data_mesh_credentials)
 
         # load the specified tables to be created as data products
         all_tables = self._load_glue_tables(
@@ -410,7 +394,7 @@ class DataMeshProducer:
     def get_data_product(self, database_name: str, table_name_regex: str):
         # generate a new glue client for the data mesh account
         data_mesh_glue_client = utils.generate_client('glue', region=self._current_region,
-                                                      credentials=self._data_mesh_sts_session.get('Credentials'))
+                                                      credentials=self._data_mesh_credentials)
         # grab the tables that match the regex
         all_tables = self._load_glue_tables(
             glue_client=data_mesh_glue_client,
@@ -457,14 +441,14 @@ class DataMeshProducer:
 
         # grant the approved permissions in lake formation
         data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
-                                                    credentials=self._data_mesh_sts_session.get('Credentials'))
+                                                    credentials=self._data_mesh_credentials)
         tables = subscription.get(TABLE_NAME)
         ram_shares = {}
 
         for t in tables:
             # get the data location for the table
             data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
-                                                          credentials=self._data_mesh_sts_session.get('Credentials'))
+                                                          credentials=self._data_mesh_credentials)
             table = data_mesh_glue_client.get_table(DatabaseName=subscription.get(DATABASE_NAME), Name=t)
             table_s3_path = table.get('Table').get('StorageDescriptor').get('Location')
 

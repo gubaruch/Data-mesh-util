@@ -244,7 +244,8 @@ to `bootstrap_account()`.
 Creating a data product replicates Glue Catalog metadata from the Producer's account into the Data Mesh account, while
 leaving the source storage at rest within the Producer. The data mesh objects are shared back to the Producer account to
 enable local control without accessing the data mesh. Data Products can be created from Glue Catalog Databases or
-one-or-more Tables, but all permissions are managed at Table level. To create a data product:
+one-or-more Tables, but all permissions are managed at Table level. Producers can run this as many times as they require. 
+To create a data product:
 
 ```python
 import logging
@@ -289,6 +290,10 @@ data_mesh_producer.create_data_products(
     expose_table_references_with_suffix=None
 )
 ```
+
+### Step 5: Request access to a Data Product Table
+
+As a consumer, you can gain view public metadata by assuming
 
 ---
 Amazon Web Services, 2021 All rights reserved.

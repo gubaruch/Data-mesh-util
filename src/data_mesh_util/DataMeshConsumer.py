@@ -22,12 +22,7 @@ class DataMeshConsumer:
     _data_consumer_role_arn = None
     _data_consumer_account_id = None
     _data_mesh_manager_role_arn = None
-    _data_mesh_sts_session = None
     _session = None
-    _iam_client = None
-    _lf_client = None
-    _ram_client = None
-    _lf_client = None
     _sts_client = None
     _config = {}
     _current_region = None
@@ -43,57 +38,39 @@ class DataMeshConsumer:
         else:
             self._current_region = region_name
 
+        self._data_mesh_account_id = data_mesh_account_id
+
         # Assume the consumer account DataMeshConsumer role, unless we have been supplied temporary credentials for that role
         # bind the test class into the producer account
-        _sts_client = utils.generate_client('sts', region_name, use_credentials)
-        _current_identity = _sts_client.get_caller_identity()
-        set_credentials = None
-        if _current_identity.get('Arn') == utils.get_role_arn(account_id=_current_identity.get('Account'),
-                                                              role_name=DATA_MESH_CONSUMER_ROLENAME):
-            set_credentials = use_credentials
-        else:
-            _sts_session = _sts_client.assume_role(
-                RoleArn=utils.get_role_arn(_current_identity.get('Account'), DATA_MESH_CONSUMER_ROLENAME),
-                RoleSessionName=utils.make_iam_session_name(_current_identity)
-            )
+        self._session, _consumer_credentials = utils.assume_iam_role(role_name=DATA_MESH_CONSUMER_ROLENAME,
+                                                                     region_name=self._current_region,
+                                                                     use_credentials=use_credentials)
 
-            set_credentials = _sts_session.get('Credentials')
-
-        if use_credentials is None:
-            self._session = boto3.session.Session(region_name=self._current_region)
-        else:
-            self._session = utils.create_session(credentials=set_credentials, region=self._current_region)
-
-        self._iam_client = self._session.client('iam')
-        self._ram_client = self._session.client('ram')
         self._sts_client = self._session.client('sts')
-        self._glue_client = self._session.client('glue')
 
         self._log_level = log_level
         self._logger.setLevel(log_level)
 
-        self._current_account = self._session.client('sts').get_caller_identity()
+        self._current_account = self._sts_client.get_caller_identity()
         self._data_consumer_account_id = self._current_account.get('Account')
 
         self._consumer_automator = ApiAutomator(target_account=self._data_consumer_account_id,
                                                 session=self._session, log_level=self._log_level)
 
-        # assume the consumer role in the mesh
-        session_name = utils.make_iam_session_name(self._current_account)
-        self._data_mesh_account_id = data_mesh_account_id
-        self._data_consumer_role_arn = utils.get_datamesh_consumer_role_arn(
-            source_account_id=self._current_account.get('Account'),
-            data_mesh_account_id=data_mesh_account_id
+        # assume the DataMeshConsumer-<account-id> role in the mesh
+        _data_mesh_session, _data_mesh_credentials = utils.assume_iam_role(
+            role_name=utils.get_central_role_name(self._data_consumer_account_id, CONSUMER),
+            region_name=self._current_region,
+            use_credentials=_consumer_credentials,
+            target_account=self._data_mesh_account_id
         )
-        self._data_mesh_sts_session = self._sts_client.assume_role(RoleArn=self._data_consumer_role_arn,
-                                                                   RoleSessionName=session_name)
-        self._logger.debug("Created new STS Session for Data Mesh Admin Consumer")
-        self._logger.debug(self._data_mesh_sts_session)
 
-        utils.validate_correct_account(self._data_mesh_sts_session.get('Credentials'), data_mesh_account_id)
+        self._logger.debug("Created new STS Session for Data Mesh Admin Consumer")
+
+        utils.validate_correct_account(_data_mesh_credentials, data_mesh_account_id)
 
         # create the subscription tracker
-        self._subscription_tracker = SubscriberTracker(credentials=self._data_mesh_sts_session.get('Credentials'),
+        self._subscription_tracker = SubscriberTracker(credentials=_data_mesh_credentials,
                                                        data_mesh_account_id=data_mesh_account_id,
                                                        region_name=self._current_region,
                                                        log_level=self._log_level)
@@ -153,6 +130,9 @@ class DataMeshConsumer:
         '''
         me = self._sts_client.get_caller_identity().get('Account')
         return self._subscription_tracker.list_subscriptions(owner_id=me)
+
+    def list_available_resources(self):
+        pass
 
     def delete_subscription(self, subscription_id: str, reason: str):
         '''
