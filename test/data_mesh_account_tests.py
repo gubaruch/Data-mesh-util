@@ -39,7 +39,7 @@ class DataMeshAdminAccountTests(unittest.TestCase):
         # enable the producer in the mesh account
         mesh_admin = dmu.DataMeshAdmin(data_mesh_account_id=MESH_ACCOUNT, region_name=self._region,
                                        log_level=logging.DEBUG, use_creds=self._creds.get(MESH))
-        mesh_admin.enable_account_as_producer(self._account_ids.get(PRODUCER))
+        mesh_admin.enable_account_as_producer(self._account_ids.get(PRODUCER_ADMIN))
 
     def test_setup_consumer(self):
         # in the consumer account, we'll initialize the required objects
@@ -50,4 +50,4 @@ class DataMeshAdminAccountTests(unittest.TestCase):
         # enable the consumer in the mesh account
         mesh_admin = dmu.DataMeshAdmin(data_mesh_account_id=MESH_ACCOUNT, region_name=self._region,
                                        log_level=logging.DEBUG, use_creds=self._creds.get(MESH))
-        mesh_admin.enable_account_as_consumer(self._account_ids.get(CONSUMER))
+        mesh_admin.enable_account_as_consumer(self._account_ids.get(CONSUMER_ADMIN))
