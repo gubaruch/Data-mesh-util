@@ -31,6 +31,7 @@ class DataMeshConsumer:
     _logger.addHandler(logging.StreamHandler(sys.stdout))
     _subscription_tracker = None
     _consumer_automator = None
+    _ro_session = None
 
     def __init__(self, data_mesh_account_id: str, region_name: str, log_level: str = "INFO", use_credentials=None):
         if region_name is None:
@@ -41,7 +42,6 @@ class DataMeshConsumer:
         self._data_mesh_account_id = data_mesh_account_id
 
         # Assume the consumer account DataMeshConsumer role, unless we have been supplied temporary credentials for that role
-        # bind the test class into the producer account
         self._session, _consumer_credentials = utils.assume_iam_role(role_name=DATA_MESH_CONSUMER_ROLENAME,
                                                                      region_name=self._current_region,
                                                                      use_credentials=use_credentials)
@@ -64,7 +64,6 @@ class DataMeshConsumer:
             use_credentials=_consumer_credentials,
             target_account=self._data_mesh_account_id
         )
-
         self._logger.debug("Created new STS Session for Data Mesh Admin Consumer")
 
         utils.validate_correct_account(_data_mesh_credentials, data_mesh_account_id)
@@ -75,8 +74,14 @@ class DataMeshConsumer:
                                                        region_name=self._current_region,
                                                        log_level=self._log_level)
 
-        self._log_level = log_level
-        self._logger.setLevel(log_level)
+        # finally, generate a read-only set of credentials in the mesh
+        self._ro_session = utils.assume_iam_role(
+            role_name=DATA_MESH_READONLY_ROLENAME,
+            region_name=self._current_region,
+            use_credentials=_data_mesh_credentials,
+            target_account=self._data_mesh_account_id
+        )
+        self._logger.debug("Created new STS Session for Data Mesh Read Only")
 
     def request_access_to_product(self, owner_account_id: str, database_name: str,
                                   request_permissions: list, tables: list = None) -> dict:

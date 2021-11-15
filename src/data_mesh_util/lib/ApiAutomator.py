@@ -266,7 +266,7 @@ class ApiAutomator:
         self._logger.info(f"Bound {policy_arn} to Group {group_name}")
 
         # let the role assume the read only consumer policy
-        if account_id == data_mesh_account_id:
+        if account_id == data_mesh_account_id and role_name != DATA_MESH_READONLY_ROLENAME:
             iam_client.attach_role_policy(RoleName=role_name,
                                           PolicyArn=utils.get_policy_arn(data_mesh_account_id,
                                                                          f"Assume{DATA_MESH_READONLY_ROLENAME}"))

@@ -42,7 +42,6 @@ class DataMeshProducer:
             self._current_region = region_name
 
         # Assume the producer account DataMeshProducer role, unless we have been supplied temporary credentials for that role
-        # bind the test class into the producer account
         self._session, _producer_credentials = utils.assume_iam_role(role_name=DATA_MESH_PRODUCER_ROLENAME,
                                                                      region_name=self._current_region,
                                                                      use_credentials=use_credentials)
