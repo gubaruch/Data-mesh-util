@@ -6,6 +6,7 @@ from boto3.dynamodb.conditions import Attr, Or, And, Key
 import shortuuid
 from datetime import datetime
 import data_mesh_util.lib.utils as utils
+from enum import Enum
 
 STATUS_ACTIVE = 'Active'
 STATUS_DENIED = 'Denied'
@@ -26,6 +27,12 @@ REQUESTED_GRANTS = 'RequestedGrants'
 PERMITTED_GRANTS = 'PermittedGrants'
 RAM_SHARES = 'RamShares'
 NOTES = 'Notes'
+
+class SubType(Enum):
+    DATABASE = 1
+    TABLE = 2
+    DATA_PRODUCT = 3
+    DOMAIN = 4
 
 
 def _generate_id():
@@ -252,12 +259,19 @@ class SubscriberTracker:
                                     database_name: str = None, tables: list = None,
                                     suppress_object_validation: bool = False) -> dict:
         # look up if there is already a subscription request for this object
+        subscription_type = None
         if database_name is not None:
-            filter = And(Attr(DATABASE_NAME).eq(database_name), Attr(STATUS).eq(STATUS_PENDING))
+            filter = Attr(DATABASE_NAME).eq(database_name)
+            if tables is None:
+                subscription_type = SubType.DATABASE
+            else:
+                subscription_type = SubType.TABLE
         elif data_product_name is not None:
-            filter = And(Attr(DATA_PRODUCT_TAG_KEY).eq(data_product_name), Attr(STATUS).eq(STATUS_PENDING))
+            filter = And(Attr(DATA_PRODUCT_TAG_KEY).eq(data_product_name))
+            subscription_type = SubType.DATA_PRODUCT
         elif domain is not None:
-            filter = And(Attr(DOMAIN_TAG_KEY).eq(domain), Attr(STATUS).eq(STATUS_PENDING))
+            filter = And(Attr(DOMAIN_TAG_KEY).eq(domain))
+            subscription_type = SubType.DOMAIN
 
         def _sub_exists():
             found = self._table.query(
@@ -269,87 +283,68 @@ class SubscriberTracker:
             )
 
             for i in found.get('Items'):
-                if tables == i.get(TABLE_NAME) and request_grants == i.get(REQUESTED_GRANTS):
-                    return i.get(SUBSCRIPTION_ID)
+                if (subscription_type == SubType.TABLE and tables == i.get(TABLE_NAME)) and request_grants == i.get(
+                        REQUESTED_GRANTS):
+                    return i
 
             return None
 
-        def _create_subscription(item, principal):
-            # generate a new subscription
+        def _put_subscription(item:dict):
             item = self._add_www(item=item)
 
             self._table.put_item(
                 Item=item
             )
 
-        subscription_type = None
-        # resolve the type of subscription being requested
-        if database_name is not None and tables is not None:
-            subscription_type = 'table'
-        elif database_name is not None and tables is None:
-            subscription_type = 'database'
-        elif domain is None and data_product_name is not None:
-            subscription_type = 'data product'
-        else:
-            subscription_type = 'domain'
+        # check if a subscription already exists
+        subscription = _sub_exists()
 
-        if subscription_type == 'database':
+        # create the base subscription object to be inserted into DDB
+        item = {
+            SUBSCRIPTION_ID: _generate_id() if subscription is None else subscription.get(SUBSCRIPTION_ID),
+            OWNER_PRINCIPAL: owner_account_id,
+            SUBSCRIBER_PRINCIPAL: principal,
+            REQUESTED_GRANTS: request_grants,
+            STATUS: STATUS_PENDING if subscription is None else subscription.get(STATUS)
+        }
+
+        sub_type = ()
+        def _return():
+            return {
+                "Type": subscription_type,
+                sub_type[0]: sub_type[1],
+                SUBSCRIPTION_ID: item.get(SUBSCRIPTION_ID)
+            }
+
+        if subscription_type == SubType.DATABASE:
             # validate that the database exists
             exists = self._validate_object(database_name=database_name,
                                            suppress_object_validation=suppress_object_validation)
             if not exists:
                 raise Exception("Database %s does not exist" % (database_name))
             else:
-                sub_id = _sub_exists()
-                if sub_id is not None:
-                    sub_id = _generate_id()
-
                 # create a database level subscription
-                item = {
-                    SUBSCRIPTION_ID: sub_id,
-                    OWNER_PRINCIPAL: owner_account_id,
-                    SUBSCRIBER_PRINCIPAL: principal,
-                    REQUESTED_GRANTS: request_grants,
-                    DATABASE_NAME: database_name,
-                    STATUS: STATUS_PENDING
-                }
-                _create_subscription(item=item, principal=principal)
-
-                return {
-                    DATABASE_NAME: database_name,
-                    SUBSCRIPTION_ID: sub_id
-                }
-        elif subscription_type == 'table':
+                item[DATABASE_NAME] = database_name
+                sub_type = DATABASE_NAME, database_name
+        elif subscription_type == SubType.TABLE:
             # validate the table list
             self._validate_objects(database_name=database_name, tables=tables,
                                    suppress_object_validation=suppress_object_validation)
-
-            # check if a subscription already exists
-            subscription_id = _sub_exists()
-
-            if subscription_id is None:
-                subscription_id = _generate_id()
-
-            item = {
-                SUBSCRIPTION_ID: subscription_id,
-                OWNER_PRINCIPAL: owner_account_id,
-                SUBSCRIBER_PRINCIPAL: principal,
-                REQUESTED_GRANTS: request_grants,
-                DATABASE_NAME: database_name,
-                TABLE_NAME: tables,
-                STATUS: STATUS_PENDING
-            }
-            _create_subscription(item=item, principal=principal)
-
-            return {TABLE_NAME: tables, SUBSCRIPTION_ID: subscription_id}
-        elif subscription_type == 'domain':
-            # validate that any objects exist tagged with the requested domain
-            pass
+            item[DATABASE_NAME] = database_name
+            item[TABLE_NAME] = tables
+            sub_type = TABLE_NAME, tables
+        elif subscription_type == SubType.DOMAIN:
+            # create a domain level subscription
+            item[DOMAIN_TAG_KEY] = domain
+            sub_type = DOMAIN_TAG_KEY, domain
         else:
-            # validate that any objects exist tagged with the data product name
-            pass
+            # create a data product level subscription
+            item[DATA_PRODUCT_TAG_KEY] = data_product_name
+            _put_subscription(item=item, principal=principal)
+            sub_type = DATA_PRODUCT_TAG_KEY, data_product_name
 
-
+        _put_subscription(item=item)
+        return _return()
 
     def get_subscription(self, subscription_id: str, force: bool = False) -> dict:
         args = {
