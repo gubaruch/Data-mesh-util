@@ -98,7 +98,7 @@ class DataMeshProducer:
                                                        region_name=self._current_region,
                                                        log_level=log_level)
 
-    def _cleanup_table_def(self, table_def: dict):
+    def _cleanup_table_def(self, table_def: dict, owner_account_id: str):
         t = table_def.copy()
 
         def rm(prop):
@@ -116,10 +116,12 @@ class DataMeshProducer:
         rm('CatalogId')
         rm('Tags')
 
+        t['Owner'] = owner_account_id
+
         return t
 
-    def _create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_lf_client, producer_ram_client,
-                           producer_glue_client, data_mesh_database_name: str, producer_account_id: str,
+    def _create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_database_name: str,
+                           producer_account_id: str,
                            data_mesh_account_id: str, create_public_metadata: bool = True,
                            expose_table_references_with_suffix: str = "_link"):
         '''
@@ -135,7 +137,7 @@ class DataMeshProducer:
         :return:
         '''
         # cleanup the TableInfo object to be usable as a TableInput
-        t = self._cleanup_table_def(table_def)
+        t = self._cleanup_table_def(table_def=table_def, owner_account_id=producer_account_id)
 
         self._logger.debug("Existing Table Definition")
         self._logger.debug(t)
@@ -361,9 +363,6 @@ class DataMeshProducer:
             created_table = self._create_mesh_table(
                 table_def=table,
                 data_mesh_glue_client=data_mesh_glue_client,
-                data_mesh_lf_client=data_mesh_lf_client,
-                producer_ram_client=producer_ram_client,
-                producer_glue_client=producer_glue_client,
                 data_mesh_database_name=data_mesh_database_name,
                 producer_account_id=self._data_producer_account_id,
                 data_mesh_account_id=self._data_mesh_account_id,
