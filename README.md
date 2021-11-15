@@ -35,16 +35,17 @@ following Data Mesh tasks:
 | Producer | Data Mesh Administrator | Consumer |
 |----------|-----------|----------|
 |* __Create Data Product__ - Exposes a Lake Formation Database and/or one-or-more Tables as __Data Products__ </br>* __
+
 Approve/Deny Subscription Request__ - Allows for a __
-Producer__ to approve a set of permissions against a Data Product  </br>* __Modify
-Subscription__ - Allows a Producer to expand or reduce the scope of a Consumer's access to a Data Product  | * __
+Producer__ to approve a set of permissions against a Data Product  </br>* __Modify Subscription__ - Allows a Producer to
+expand or reduce the scope of a Consumer's access to a Data Product | * __
 Initialize Mesh Account__ - Sets up an AWS Account to act as the central Data Mesh governance account</br>* __Initialize
-Producer Account__ - Sets up an AWS Account to act as a Data Producer </br>* __Initialize Consumer
-Account__ - Sets up an AWS Account to act as a Data Consumer </br>* __Enable Account as
-Producer__ - Identifies an account as a Producer within the Data Mesh Account </br>* __Enable Account as
-Consumer__  - Identifies an account as a Consumer within the Data Mesh Account| * __Request Access to
-Product__ - Creates a request for access to a Data Product including requested grants </br>* __Finalize
-Subscription__ - Once a subscription has been granted for a data product, imports the metadata into the Consumer Account </br>* __
+Producer Account__ - Sets up an AWS Account to act as a Data Producer </br>* __Initialize Consumer Account__ - Sets up
+an AWS Account to act as a Data Consumer </br>* __Enable Account as Producer__ - Identifies an account as a Producer
+within the Data Mesh Account </br>* __Enable Account as Consumer__  - Identifies an account as a Consumer within the
+Data Mesh Account| * __Request Access to Product__ - Creates a request for access to a Data Product including requested
+grants </br>* __Finalize Subscription__ - Once a subscription has been granted for a data product, imports the metadata
+into the Consumer Account </br>* __
 List Product Access__ - Lists which subscriptions are available to the consumer including the status of the request |
 
 The following general functionality available to any Data Mesh role:
@@ -193,8 +194,8 @@ mesh_macros.bootstrap_account(
 ### Step 3: Enable an AWS Account as a Consumer
 
 Accounts can be both producers and consumers, so you may wish to run this step against the account used above. You may
-also have Accounts that are Consumer only, and cannot create data shares. This step is only run once per AWS Account
-and must be run using credentials that have AdministratorAccess as well as being Lake Formation Data Lake Admin:
+also have Accounts that are Consumer only, and cannot create data shares. This step is only run once per AWS Account and
+must be run using credentials that have AdministratorAccess as well as being Lake Formation Data Lake Admin:
 
 ```python
 import logging
@@ -235,28 +236,58 @@ mesh_macros.bootstrap_account(
 ```
 
 The above Steps 2 and 3 can be run for any number of accounts that you require to act as Producers or Consumers. If you
-want to provision an account as both Producer _and_ Consumer, then use `account_type='both'` in the above call to `bootstrap_account()`.
+want to provision an account as both Producer _and_ Consumer, then use `account_type='both'` in the above call
+to `bootstrap_account()`.
 
 ### Step 4: Create a Data Product
 
 Creating a data product replicates Glue Catalog metadata from the Producer's account into the Data Mesh account, while
-leaving the source storage at rest within the Producer. The data mesh objects are shared back to the Producer account
-to enable local control without accessing the data mesh. Data Products can be created from Glue Catalog Databases or
+leaving the source storage at rest within the Producer. The data mesh objects are shared back to the Producer account to
+enable local control without accessing the data mesh. Data Products can be created from Glue Catalog Databases or
 one-or-more Tables, but all permissions are managed at Table level. To create a data product:
 
 ```python
+import logging
+from data_mesh_util import DataMeshProducer as dmp
 
-        self._mgr.create_data_products(
-            source_database_name=database_name,
-            table_name_regex=table_regex,
-            domain=domain,
-            data_product_name=data_product_name,
-            create_public_metadata=True,
-            sync_mesh_catalog_schedule=cron_expr,
-            sync_mesh_crawler_role_arn=crawler_role,
-            expose_data_mesh_db_name=None,
-            expose_table_references_with_suffix=None
-        )
+'''
+Script to create a data product for an existing Glue Catalog Object
+'''
+
+data_mesh_account = 'insert data mesh account number here
+aws_region = 'insert the AWS Region you want to install into'
+producer_credentials = {
+    "AccountId": "The Producer AWS Account ID",
+    "AccessKeyId": "Your access key",
+    "SecretAccessKey": "Your secret key",
+    "SessionToken": "Optional - a session token, if you are using an IAM Role & temporary credentials"
+}
+data_mesh_producer = dmp.DataMeshProducer(
+    data_mesh_account_id=data_mesh_account,
+    log_level=logging.DEBUG,
+    region_name=aws_region,
+    use_credentials=producer_credentials
+)
+
+database_name = 'The name of the Glue Catalog Database where the table lives'
+table_name = 'The Table Name'
+domain_name = 'The name of the Domain which the table should be tagged with'
+data_product_name = 'If you are publishing multiple tables, the product name to be used for all'
+cron_expr = 'daily'
+crawler_role = 'IAM Role that the created Glue Crawler should run as'
+create_public_metadata = True if 'Use value True to allow any user to see the shared object in the data mesh otherwise False' else False
+
+data_mesh_producer.create_data_products(
+    source_database_name=database_name,
+    table_name_regex=table_name,
+    domain=domain_name,
+    data_product_name=data_product_name,
+    create_public_metadata=True,
+    sync_mesh_catalog_schedule=cron_expr,
+    sync_mesh_crawler_role_arn=crawler_role,
+    expose_data_mesh_db_name=None,
+    expose_table_references_with_suffix=None
+)
 ```
 
 ---
