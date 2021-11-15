@@ -43,10 +43,26 @@ class DataMeshConsumer:
         else:
             self._current_region = region_name
 
-        if use_credentials is not None:
-            self._session = utils.create_session(credentials=use_credentials, region=self._current_region)
+        # Assume the consumer account DataMeshConsumer role, unless we have been supplied temporary credentials for that role
+        # bind the test class into the producer account
+        _sts_client = utils.generate_client('sts', region_name, use_credentials)
+        _current_identity = _sts_client.get_caller_identity()
+        set_credentials = None
+        if _current_identity.get('Arn') == utils.get_role_arn(account_id=_current_identity.get('Account'),
+                                                              role_name=DATA_MESH_CONSUMER_ROLENAME):
+            set_credentials = use_credentials
         else:
+            _sts_session = _sts_client.assume_role(
+                RoleArn=utils.get_role_arn(_current_identity.get('Account'), DATA_MESH_CONSUMER_ROLENAME),
+                RoleSessionName=utils.make_iam_session_name(_current_identity)
+            )
+
+            set_credentials = _sts_session.get('Credentials')
+
+        if use_credentials is None:
             self._session = boto3.session.Session(region_name=self._current_region)
+        else:
+            self._session = utils.create_session(credentials=set_credentials, region=self._current_region)
 
         self._iam_client = self._session.client('iam')
         self._ram_client = self._session.client('ram')

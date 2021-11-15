@@ -249,6 +249,9 @@ class DataMeshAdmin:
         Enables a remote role to act as a data producer by granting them access to the DataMeshAdminProducer Role
         :return:
         '''
+        if account_id is None:
+            raise Exception("Must Provide Account ID")
+
         self._create_producer_role(account_id=account_id)
 
         self._add_trust_relationship(
@@ -269,6 +272,9 @@ class DataMeshAdmin:
         Enables a remote account to act as a data consumer by granting them access to the DataMeshAdminConsumer Role
         :return:
         '''
+        if account_id is None:
+            raise Exception("Must Provide Account ID")
+
         self._create_consumer_role(account_id=account_id)
 
         self._add_trust_relationship(

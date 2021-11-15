@@ -51,8 +51,8 @@ This file allows for the configuration of multiple accounts, for the Data Mesh, 
 user for both the producer and consumer. Please note that the keys of this document are reserved and cannot be changed or extended
 (`Mesh`, `Producer`, `ProducerAdmin`, `Consumer`, and `ConsumerAdmin` are all reserved words).
 
-In general, you should start by configuring administrative users `Mesh`, `ProducerAdmin`, and `Consumer` administrators. You can then
-setup the core Data Mesh functionality, and then add `Producer` and `ConsumerAdmin` entries from the respective accounts after
+In general, you should start by configuring administrative users `Mesh`, `ProducerAdmin`, and `ConsumerAdmin` administrators. You can then
+setup the core Data Mesh functionality, and then add `Producer` and `Consumer` entries from the respective accounts after
 enabling Access Keys for the created `DataMeshProducer` and `DataMeshConsumer` sample users.
 
 Please note that `Mesh`, `ProducerAdmin`, and `ConsumerAdmin` must all be assigned Data Lake Admin permissions in Lake Formation. This permissions
