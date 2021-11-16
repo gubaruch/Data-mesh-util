@@ -270,7 +270,6 @@ class DataMeshProducer:
         # create clients for the current account and with the new credentials in the data mesh account
         producer_glue_client = self._session.client('glue', region_name=self._current_region)
         producer_lf_client = self._session.client('lakeformation', region_name=self._current_region)
-        producer_ram_client = self._session.client('ram', region_name=self._current_region)
         data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
                                                       credentials=self._data_mesh_credentials)
         data_mesh_lf_client = utils.generate_client(service='lakeformation', region=self._current_region,
@@ -444,6 +443,15 @@ class DataMeshProducer:
         tables = subscription.get(TABLE_NAME)
         ram_shares = {}
 
+        # apply a glue catalog resource policy allowing the consumer to access objects by tag
+        self._mesh_automator.update_glue_catalog_resource_policy(
+            region=self._current_region,
+            database_name=subscription.get(DATABASE_NAME),
+            tables=subscription.get(TABLE_NAME),
+            producer_account_id=self._data_mesh_account_id,
+            consumer_account_id=subscription.get(SUBSCRIBER_PRINCIPAL)
+        )
+
         for t in tables:
             # get the data location for the table
             data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
@@ -528,5 +536,65 @@ class DataMeshProducer:
         :param reason:
         :return:
         '''
-        # TODO implement this method!
-        return self._subscription_tracker.delete_subscription(subscription_id=subscription_id, reason=reason)
+        subscription = self.get_subscription(request_id=subscription_id)
+
+        if subscription is None:
+            raise Exception("No Subscription Found")
+        else:
+            lf_client = self._data_mesh_session.client('lakeformation')
+
+            entries = []
+            for t in subscription.get(TABLE_NAME):
+                perms_minus_select = subscription.get(PERMITTED_GRANTS).copy()
+                del perms_minus_select['SELECT']
+
+                # revoke table level permissions minus SELECT
+                entries.append({
+                    'Id': shortuuid.uuid(),
+                    'Principal': {
+                        'DataLakePrincipalIdentifier': subscription.get(SUBSCRIBER_PRINCIPAL)
+                    },
+                    'Resource': {
+                        'Table': {
+                            'DatabaseName': subscription.get(DATABASE_NAME),
+                            'Name': t
+                        }
+                    },
+                    'Permissions': perms_minus_select
+                })
+                # revoke column level select permission
+                if 'SELECT' in subscription.get(PERMITTED_GRANTS):
+                    entries.append({
+                        'Id': shortuuid.uuid(),
+                        'Principal': {
+                            'DataLakePrincipalIdentifier': subscription.get(SUBSCRIBER_PRINCIPAL)
+                        },
+                        'Resource': {
+                            'TableWithColumns': {
+                                'DatabaseName': subscription.get(DATABASE_NAME),
+                                'Name': t,
+                                'ColumnWildcard': {}
+                            }
+                        },
+                        'Permissions': ['SELECT']
+                    })
+
+            # add the database grant
+            entries.append({
+                'Id': shortuuid.uuid(),
+                'Principal': {
+                    'DataLakePrincipalIdentifier': subscription.get(SUBSCRIBER_PRINCIPAL)
+                },
+                'Resource': {
+                    'Database': {
+                        'Name': subscription.get(DATABASE_NAME)
+                    }
+                },
+                'Permissions': ['DESCRIBE']
+            })
+
+            lf_client.batch_revoke_permissions(
+                Entries=entries
+            )
+
+            return self._subscription_tracker.delete_subscription(subscription_id=subscription_id, reason=reason)

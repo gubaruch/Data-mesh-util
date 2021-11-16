@@ -37,7 +37,9 @@
                 "glue:UpdateDatabase",
                 "glue:UpdatePartition",
                 "glue:UpdateSchema",
-                "glue:UpdateTable"
+                "glue:UpdateTable",
+                "glue:GetResourcePolicy",
+                "glue:PutResourcePolicy"
             ],
             "Resource": "*"
         },

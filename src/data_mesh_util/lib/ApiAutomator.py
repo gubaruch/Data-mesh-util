@@ -15,7 +15,6 @@ class ApiAutomator:
     _target_account = None
     _session = None
     _logger = None
-    _region = None
     _logger = logging.getLogger("ApiAutomator")
     # make sure we always log to standard out
     _logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -121,7 +120,7 @@ class ApiAutomator:
                     },
                 ]
             }
-            response = lf_client.add_lf_tags_to_resource(**args)
+            lf_client.add_lf_tags_to_resource(**args)
         except lf_client.exceptions.AlreadyExistsException:
             pass
 
@@ -145,10 +144,38 @@ class ApiAutomator:
             policy_arn = response.get('Policy').get('Arn')
             waiter = iam_client.get_waiter('policy_exists')
             waiter.wait(PolicyArn=policy_arn)
+            self._logger.info(f"Policy {policy_name} created as {policy_arn}")
         except iam_client.exceptions.EntityAlreadyExistsException:
             policy_arn = utils.get_policy_arn(account_id, policy_name)
+            while True:
+                try:
+                    iam_client.create_policy_version(
+                        PolicyArn=policy_arn,
+                        PolicyDocument=policy_doc,
+                        SetAsDefault=True
+                    )
+                    self._logger.info(f"Policy {policy_name} version created as {policy_arn}")
+                    break
+                except iam_client.exceptions.LimitExceededException as le:
+                    if "versions" in str(le):
+                        versions = iam_client.list_policy_versions(
+                            PolicyArn=policy_arn,
+                            MaxItems=10
+                        )
 
-        self._logger.info(f"Policy {policy_name} validated as {policy_arn}")
+                        # delete the policy version at the last position
+                        last_index = len(versions.get('Versions')) - 1
+                        v = versions.get('Versions')[last_index].get('VersionId')
+                        iam_client.delete_policy_version(
+                            PolicyArn=policy_arn,
+                            VersionId=v
+                        )
+                        self._logger.info(f"Deleted Policy Version {v}")
+
+                        # after this we'll retry immediately
+                    else:
+                        # this is a general throttling issue and we'll retry
+                        time.sleep(1)
 
         # create a non-root user who can assume the role
         try:
@@ -318,6 +345,107 @@ class ApiAutomator:
             ]
         )
         self._logger.info(f"Granted {iam_role_arn} CREATE_DATABASE privileges on Catalog")
+
+    def update_glue_catalog_resource_policy(self, region: str, producer_account_id: str, consumer_account_id: str,
+                                            database_name: str, tables: list):
+        glue_client = self._get_client('glue')
+        new_resource_policy = None
+        current_resource_policy = None
+        try:
+            current_resource_policy = glue_client.get_resource_policy()
+        except glue_client.exceptions.EntityNotFoundException:
+            pass
+
+        cf = {
+            'region': region,
+            'producer_account_id': producer_account_id,
+            'consumer_account_id': consumer_account_id,
+            "database_name": database_name,
+            'tables': tables
+        }
+        # render the table fragment
+        table_list = utils.generate_policy('glue_table_list_fragment.pystache', config=cf).split(',')[
+                     :-1]
+
+        # add the table list and generate full policy
+        cf['table_list'] = table_list
+        policy = json.loads(utils.generate_policy('lf_cross_account_tbac.pystache', config=cf))
+
+        policy_condition = None
+        if current_resource_policy is None:
+            new_resource_policy = {
+                "Version": "2012-10-17",
+                "Statement": [policy]
+            }
+            glue_client.put_resource_policy(
+                PolicyInJson=json.dumps(new_resource_policy),
+                PolicyExistsCondition='NOT_EXIST',
+                EnableHybrid='TRUE'
+            )
+            self._logger.info(
+                f"Created new Catalog Resource Policy on {producer_account_id} allowing Tag Based Access by {consumer_account_id}")
+        else:
+            new_resource_policy = json.loads(current_resource_policy.get('PolicyInJson'))
+            current_hash = current_resource_policy.get('PolicyHash')
+
+            update_statement, policy_index = self._get_glue_resource_policy_statement_to_modify(
+                region=region,
+                policy=new_resource_policy, producer_account_id=producer_account_id,
+                consumer_account_id=consumer_account_id,
+                database_name=database_name, tables=tables
+            )
+
+            # add the new statement
+            if update_statement is None:
+                new_resource_policy['Statement'].append(policy)
+            else:
+                # add the table resources to the existing statement referencing the region and database
+                update_statement.get('Resource').extend(table_list)
+                new_resource_policy['Statement'][policy_index] = update_statement
+
+            glue_client.put_resource_policy(
+                PolicyInJson=json.dumps(new_resource_policy),
+                PolicyHashCondition=current_hash,
+                PolicyExistsCondition='MUST_EXIST',
+                EnableHybrid='TRUE'
+            )
+            self._logger.info(
+                f"Updated Catalog Resource Policy on {producer_account_id} allowing Tag Based Access by {consumer_account_id}")
+
+    def _get_glue_resource_policy_statement_to_modify(self, region: str, policy: dict, producer_account_id: str,
+                                                      consumer_account_id: str,
+                                                      database_name: str, tables: list) -> tuple:
+        # go through the policy to find if there's a match on region, consumer principal, and database
+        target_statement_index = 0
+        statement_match = None
+        for i, statement in enumerate(policy.get('Statement')):
+            if 'AWS' in statement.get('Principal') and consumer_account_id in statement.get('Principal').get('AWS'):
+                # go through the resources to get region and DB match
+                for j, resource in enumerate(statement.get('Resource')):
+                    # resources will be in format:
+                    #
+                    # "arn:aws:glue:<region>:<account-id>:table/*",
+                    # "arn:aws:glue:<region>:<account-id>:database/*",
+                    # "arn:aws:glue:<region>:<account-id>:catalog"
+                    if region in resource and producer_account_id in resource and (
+                            ':database' in resource and database_name in resource):
+                        # this statement is a match
+                        target_statement_index = i
+                        statement_match = statement
+                        break
+
+        # if we have a match, strip out any matching tables, as they will be re-added later
+        if statement_match is not None:
+            remove_indexes = []
+            for k, resource in enumerate(statement_match.get('Resource')):
+                for t in tables:
+                    if t in resource:
+                        remove_indexes.append(k)
+
+            for val in remove_indexes:
+                statement_match.get('Resource').pop(val)
+
+            return statement_match, target_statement_index
 
     def lf_grant_permissions(self, data_mesh_account_id: str, principal: str, database_name: str,
                              table_name: str = None,

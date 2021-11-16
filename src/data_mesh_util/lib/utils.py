@@ -52,7 +52,6 @@ def generate_policy(template_file: str, config: dict):
 
     return rendered
 
-
 def create_assume_role_doc(aws_principals: list = None, resource: str = None, additional_principals: dict = None):
     document = {
         "Version": "2012-10-17",
