@@ -45,7 +45,7 @@ class Step3():
         approval = self._mgr.approve_access_request(
             request_id=subscription_id,
             grant_permissions=grant_permissions,
-            grantable_permissions=None,
+            grantable_permissions=grant_permissions,
             decision_notes=approval_notes
         )
 
