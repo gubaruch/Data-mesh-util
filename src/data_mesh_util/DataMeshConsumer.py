@@ -115,11 +115,11 @@ class DataMeshConsumer:
         data_mesh_database_name = subscription.get(DATABASE_NAME)
 
         # create a shared database reference
-        self._consumer_automator.get_or_create_database(
-            database_name=data_mesh_database_name,
-            database_desc=f"Database to contain objects from Producer Database {subscription.get(OWNER_PRINCIPAL)}.{subscription.get(DATABASE_NAME)}",
-            source_account=self._data_mesh_account_id
-        )
+        # self._consumer_automator.get_or_create_database(
+        #     database_name=data_mesh_database_name,
+        #     database_desc=f"Database to contain objects from Producer Database {subscription.get(OWNER_PRINCIPAL)}.{subscription.get(DATABASE_NAME)}",
+        #     source_account=self._data_mesh_account_id
+        # )
 
         self._consumer_automator.accept_pending_lf_resource_shares(
             sender_account=self._data_mesh_account_id
@@ -135,9 +135,6 @@ class DataMeshConsumer:
         '''
         me = self._sts_client.get_caller_identity().get('Account')
         return self._subscription_tracker.list_subscriptions(owner_id=me)
-
-    def list_available_resources(self):
-        pass
 
     def delete_subscription(self, subscription_id: str, reason: str):
         '''
