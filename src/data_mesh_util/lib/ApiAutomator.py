@@ -388,7 +388,7 @@ class ApiAutomator:
             new_resource_policy = json.loads(current_resource_policy.get('PolicyInJson'))
             current_hash = current_resource_policy.get('PolicyHash')
 
-            update_statement, policy_index = self._get_glue_resource_policy_statement_to_modify(
+            update_statement, policy_index, did_modification = self._get_glue_resource_policy_statement_to_modify(
                 region=region,
                 policy=new_resource_policy, producer_account_id=producer_account_id,
                 consumer_account_id=consumer_account_id,
@@ -398,19 +398,19 @@ class ApiAutomator:
             # add the new statement
             if update_statement is None:
                 new_resource_policy['Statement'].append(policy)
-            else:
-                # add the table resources to the existing statement referencing the region and database
-                update_statement.get('Resource').extend(table_list)
+                did_modification = True
+            elif update_statement is not None:
                 new_resource_policy['Statement'][policy_index] = update_statement
 
-            glue_client.put_resource_policy(
-                PolicyInJson=json.dumps(new_resource_policy),
-                PolicyHashCondition=current_hash,
-                PolicyExistsCondition='MUST_EXIST',
-                EnableHybrid='TRUE'
-            )
-            self._logger.info(
-                f"Updated Catalog Resource Policy on {producer_account_id} allowing Tag Based Access by {consumer_account_id}")
+            if did_modification is True:
+                glue_client.put_resource_policy(
+                    PolicyInJson=json.dumps(new_resource_policy),
+                    PolicyHashCondition=current_hash,
+                    PolicyExistsCondition='MUST_EXIST',
+                    EnableHybrid='TRUE'
+                )
+                self._logger.info(
+                    f"Updated Catalog Resource Policy on {producer_account_id} allowing Tag Based Access by {consumer_account_id}")
 
     def _get_glue_resource_policy_statement_to_modify(self, region: str, policy: dict, producer_account_id: str,
                                                       consumer_account_id: str,
@@ -418,6 +418,7 @@ class ApiAutomator:
         # go through the policy to find if there's a match on region, consumer principal, and database
         target_statement_index = 0
         statement_match = None
+        missing_tables = tables.copy()
         for i, statement in enumerate(policy.get('Statement')):
             if 'AWS' in statement.get('Principal') and consumer_account_id in statement.get('Principal').get('AWS'):
                 # go through the resources to get region and DB match
@@ -434,18 +435,22 @@ class ApiAutomator:
                         statement_match = statement
                         break
 
-        # if we have a match, strip out any matching tables, as they will be re-added later
+        did_modification = False
         if statement_match is not None:
-            remove_indexes = []
             for k, resource in enumerate(statement_match.get('Resource')):
-                for t in tables:
-                    if t in resource:
-                        remove_indexes.append(k)
+                resource_name = resource.split("/")[-1]
+                try:
+                    resource_index = missing_tables.index(resource_name)
+                    del missing_tables[resource_index]
+                except ValueError:
+                    pass
 
-            for val in remove_indexes:
-                statement_match.get('Resource').pop(val)
+            # add the tables that were missing
+            if len(missing_tables) > 0:
+                statement_match['Resource'].extend(missing_tables)
+                did_modification = True
 
-            return statement_match, target_statement_index
+            return statement_match, target_statement_index, did_modification
 
     def lf_grant_permissions(self, data_mesh_account_id: str, principal: str, database_name: str,
                              table_name: str = None,
