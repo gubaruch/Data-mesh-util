@@ -382,7 +382,7 @@ class ApiAutomator:
     def enable_crawler_role(self, crawler_role_arn: str, grant_to_role_name: str):
         if crawler_role_arn is None or grant_to_role_name is None:
             raise Exception("Cannot enable Crawler Role without Role Arn and Target Role Name")
-        
+
         crawler_role_name = crawler_role_arn.split('/')[-1]
         config = {
             "role_name": crawler_role_name,
@@ -539,6 +539,8 @@ class ApiAutomator:
                 did_modification = True
 
             return statement_match, target_statement_index, did_modification
+        else:
+            return None, None, None
 
     def lf_grant_permissions(self, data_mesh_account_id: str, principal: str, database_name: str,
                              table_name: str = None,
