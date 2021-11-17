@@ -323,6 +323,10 @@ class DataMeshAdmin:
             policy_template = "producer_account_policy.pystache"
             target_account = self._data_producer_account_id
 
+        # run a pre-flight check here to check that the caller has data lake admin
+        self._automator.assert_is_data_lake_admin(
+            principal=utils.get_role_arn(account_id=target_account, role_name=local_role_name))
+
         self._logger.info(f"Setting up Account {source_account} as a Data {type}")
 
         group_name = f"{local_role_name}Group"

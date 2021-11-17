@@ -542,6 +542,18 @@ class ApiAutomator:
         else:
             return None, None, None
 
+    def assert_is_data_lake_admin(self, principal):
+        lf_client = self._get_client('lakeformation')
+
+        admin_matched = False
+        for admin in lf_client.get_data_lake_settings().get('DataLakeSettings').get("DataLakeAdmins"):
+            if principal == admin.get('DataLakePrincipalIdentifier'):
+                admin_matched = True
+                break
+
+        if admin_matched is False:
+            raise Exception(f"Principal {principal} is not Data Lake Admin")
+
     def lf_grant_permissions(self, data_mesh_account_id: str, principal: str, database_name: str,
                              table_name: str = None,
                              permissions: list = ['ALL'],
