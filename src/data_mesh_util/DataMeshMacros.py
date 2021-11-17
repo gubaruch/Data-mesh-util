@@ -13,7 +13,7 @@ class DataMeshMacros:
         self._region = region_name
         self._log_level = log_level
 
-    def bootstrap_account(self, account_type: str, mesh_credentials, account_credentials):
+    def bootstrap_account(self, account_type: str, mesh_credentials, account_credentials, crawler_role_arn: str = None):
         # create a data mesh admin for the mesh account
         mesh_admin = data_mesh_admin.DataMeshAdmin(
             data_mesh_account_id=self._data_mesh_account_id,
@@ -32,7 +32,7 @@ class DataMeshMacros:
 
         if account_type == PRODUCER or account_type.lower() == self._BOTH.lower():
             account_admin.initialize_producer_account()
-            mesh_admin.enable_account_as_producer(account_credentials.get('AccountId'))
+            mesh_admin.enable_account_as_producer(account_id=account_credentials.get('AccountId'))
         elif account_type == CONSUMER or account_type.lower() == self._BOTH.lower():
             account_admin.initialize_consumer_account()
-            mesh_admin.enable_account_as_consumer(account_credentials.get('AccountId'))
+            mesh_admin.enable_account_as_consumer(account_id=account_credentials.get('AccountId'))

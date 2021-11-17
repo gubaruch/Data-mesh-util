@@ -379,6 +379,39 @@ class ApiAutomator:
 
         return all_partitions
 
+    def enable_crawler_role(self, crawler_role_arn: str, grant_to_role_name: str):
+        if crawler_role_arn is None or grant_to_role_name is None:
+            raise Exception("Cannot enable Crawler Role without Role Arn and Target Role Name")
+        
+        crawler_role_name = crawler_role_arn.split('/')[-1]
+        config = {
+            "role_name": crawler_role_name,
+            "role_arn": crawler_role_arn
+        }
+        policy = utils.generate_policy("enable_crawler_role.pystache", config)
+        iam_client = self._get_client('iam')
+        try:
+            response = iam_client.create_policy(
+                PolicyName=f"EnableCrawlerRole{crawler_role_name}",
+                Path=DATA_MESH_IAM_PATH,
+                PolicyDocument=policy,
+                Description=(f"Policy allowing the grantee to pass Crawler Role {crawler_role_name}"),
+                Tags=DEFAULT_TAGS
+            )
+            policy_arn = response.get('Policy').get('Arn')
+            waiter = iam_client.get_waiter('policy_exists')
+            waiter.wait(PolicyArn=policy_arn)
+        except iam_client.exceptions.EntityAlreadyExistsException:
+            pass
+
+        # attach to the input role
+        iam_client.attach_role_policy(
+            RoleName=grant_to_role_name,
+            PolicyArn=policy_arn
+        )
+
+        self._logger.info(f"Enabled {grant_to_role_name} to pass role {crawler_role_name} to Glue Crawlers")
+
     def create_table_partition_metadata(self, database_name: str, table_name: str, partition_input_list: list):
         glue_client = self._get_client('glue')
 

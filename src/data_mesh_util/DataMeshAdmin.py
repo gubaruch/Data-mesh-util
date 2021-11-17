@@ -223,14 +223,14 @@ class DataMeshAdmin:
             "SubscriptionTracker": self._subscription_tracker.get_endpoints()
         }
 
-    def initialize_producer_account(self):
+    def initialize_producer_account(self, crawler_role_arn: str = None):
         '''
         Sets up an AWS Account to act as a Data Provider into the central Data Mesh Account. This method should be invoked
         by an Administrator of the Producer Account. Creates IAM Role & Policy to get and put restricted S3 Bucket Policies.
         Requires at least 1 S3 Bucket Policy be enabled for future grants.
         :return:
         '''
-        return self._initialize_account_as(type=PRODUCER)
+        return self._initialize_account_as(type=PRODUCER, crawler_role_arn=crawler_role_arn)
 
     def _add_trust_relationship(self, account_id: str, trust_role: str, update_role: str):
         '''
@@ -244,7 +244,7 @@ class DataMeshAdmin:
                                               trust_role_name=trust_role,
                                               update_role_name=update_role)
 
-    def enable_account_as_producer(self, account_id: str):
+    def enable_account_as_producer(self, account_id: str, enable_crawler_role: str = None):
         '''
         Enables a remote role to act as a data producer by granting them access to the DataMeshAdminProducer Role
         :return:
@@ -290,7 +290,7 @@ class DataMeshAdmin:
             update_role=DATA_MESH_READONLY_ROLENAME
         )
 
-    def _initialize_account_as(self, type: str):
+    def _initialize_account_as(self, type: str, crawler_role_arn: str = None):
         '''
         Sets up an AWS Account to act as a Data Producer or Consumer from the central Data Mesh Account. This method should
         be invoked by an Administrator of the Producer or Consumer Account. Creates IAM Role & Policy which allows a remote account to
@@ -386,13 +386,21 @@ class DataMeshAdmin:
         # allow the local role to create databases, if they don't have it already
         self._automator.lf_grant_create_db(iam_role_arn=local_role_arn)
 
+        # enable the crawler role if provided
+        if crawler_role_arn is not None:
+            self.enable_crawler_passrole(crawler_role_arn=crawler_role_arn, target_role=local_role_arn)
+
         return iam_details
 
-    def initialize_consumer_account(self):
+    def initialize_consumer_account(self, crawler_role_arn: str = None):
         '''
         Sets up an AWS Account to act as a Data Consumer from the central Data Mesh Account. This method should be invoked
         by an Administrator of the Consumer Account. Creates IAM Role & Policy which allows an end user to assume the
         DataMeshAdminConsumer Role and subscribe to products.
         :return:
         '''
-        return self._initialize_account_as(type=CONSUMER)
+        return self._initialize_account_as(type=CONSUMER, crawler_role_arn=crawler_role_arn)
+
+    def enable_crawler_passrole(self, crawler_role_arn: str, target_role: str) -> None:
+        self._automator.enable_crawler_role(crawler_role_arn=crawler_role_arn,
+                                            grant_to_role_name=target_role)

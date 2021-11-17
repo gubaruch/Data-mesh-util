@@ -3,6 +3,7 @@ import logging
 import sys
 import os
 import inspect
+import argparse
 
 two_up = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))))
 sys.path.insert(0, two_up)
@@ -26,7 +27,7 @@ class Step0():
     def setUp(self) -> None:
         warnings.filterwarnings("ignore", category=ResourceWarning)
 
-    def setup_central_account(self):
+    def setup_central_account(self, producer_crawler_role_arn: str = None, consumer_crawler_role_arn: str = None):
         # create the data mesh
         mesh_admin = data_mesh_admin.DataMeshAdmin(data_mesh_account_id=self._account_ids.get(MESH),
                                                    region_name=self._region,
@@ -41,13 +42,21 @@ class Step0():
         # create the producer account
         mesh_macros.bootstrap_account(account_type=PRODUCER,
                                       mesh_credentials=self._creds.get(MESH),
-                                      account_credentials=self._creds.get(PRODUCER_ADMIN))
+                                      account_credentials=self._creds.get(PRODUCER_ADMIN),
+                                      crawler_role_arn=producer_crawler_role_arn)
 
         # create the consumer_account
         mesh_macros.bootstrap_account(account_type=CONSUMER,
                                       mesh_credentials=self._creds.get(MESH),
-                                      account_credentials=self._creds.get(CONSUMER_ADMIN))
+                                      account_credentials=self._creds.get(CONSUMER_ADMIN),
+                                      crawler_role_arn=consumer_crawler_role_arn)
 
 
 if __name__ == '__main__':
-    Step0().setup_central_account()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--producer_crawler_role_arn', dest='producer_crawler_role_arn', required=False)
+    parser.add_argument('--consumer_crawler_role_arn', dest='consumer_crawler_role_arn', required=False)
+    args = parser.parse_args()
+
+    Step0().setup_central_account(producer_crawler_role_arn=args.producer_crawler_role_arn,
+                                  consumer_crawler_role_arn=args.consumer_crawler_role_arn)
