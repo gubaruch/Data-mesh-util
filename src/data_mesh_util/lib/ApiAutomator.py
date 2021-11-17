@@ -333,18 +333,73 @@ class ApiAutomator:
             )
 
     def lf_grant_create_db(self, iam_role_arn: str):
-        # grant this role the ability to create databases and tables
-        lf_client = self._get_client('lakeformation')
-        lf_client.grant_permissions(
-            Principal={
-                'DataLakePrincipalIdentifier': iam_role_arn
-            },
-            Resource={'Catalog': {}},
-            Permissions=[
-                'CREATE_DATABASE'
+        # this call is subject to race conditions with IAM roles which haven't propagated to LF, so retry 5 times
+        tries = 0
+        completed = False
+        while completed is False and tries < 5:
+            try:
+                # grant this role the ability to create databases and tables
+                lf_client = self._get_client('lakeformation')
+                lf_client.grant_permissions(
+                    Principal={
+                        'DataLakePrincipalIdentifier': iam_role_arn
+                    },
+                    Resource={'Catalog': {}},
+                    Permissions=[
+                        'CREATE_DATABASE'
+                    ]
+                )
+                self._logger.info(f"Granted {iam_role_arn} CREATE_DATABASE privileges on Catalog")
+                completed = True
+            except lf_client.exceptions.InvalidInputException as iie:
+                if 'Invalid principal' in str(iie):
+                    tries += 1
+                    time.sleep(2)
+                else:
+                    raise iie
+
+    def get_table_partitions(self, database_name: str, table_name: str) -> list:
+        # load the partitions for the table if there are any
+        glue_client = self._get_client('glue')
+        all_partitions = []
+        partition_args = {
+            "DatabaseName": database_name,
+            "TableName": table_name,
+            "ExcludeColumnSchema": False
+        }
+        has_more_partitions = True
+        while has_more_partitions is True:
+            partitions = glue_client.get_partitions(**partition_args)
+            all_partitions.extend(partitions.get('Partitions'))
+
+            if 'NextToken' in partitions:
+                partition_args['NextToken'] = partitions.get('NextToken')
+            else:
+                has_more_partitions = False
+
+        return all_partitions
+
+    def create_table_partition_metadata(self, database_name: str, table_name: str, partition_input_list: list):
+        glue_client = self._get_client('glue')
+
+        partitions_created = 0
+        for p in partition_input_list:
+            keys = [
+                'DatabaseName', 'TableName', 'CreationTime', 'LastAnalyzedTime', 'CatalogId'
             ]
-        )
-        self._logger.info(f"Granted {iam_role_arn} CREATE_DATABASE privileges on Catalog")
+            p = utils.remove_dict_keys(input_dict=p, remove_keys=keys)
+
+            try:
+                glue_client.create_partition(
+                    DatabaseName=database_name,
+                    TableName=table_name,
+                    PartitionInput=p
+                )
+                partitions_created += 1
+            except glue_client.exceptions.AlreadyExistsException:
+                pass
+
+        self._logger.info(f"Create {partitions_created} new Table Partitions")
 
     def update_glue_catalog_resource_policy(self, region: str, producer_account_id: str, consumer_account_id: str,
                                             database_name: str, tables: list):

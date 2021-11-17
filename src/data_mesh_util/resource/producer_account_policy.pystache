@@ -17,6 +17,7 @@
                 "glue:GetTable",
                 "glue:GetCrawler",
                 "glue:GetDatabases",
+                "glue:GetPartitions",
                 "glue:GetDatabase",
                 "glue:CreateDatabase",
                 "glue:CreateTable",

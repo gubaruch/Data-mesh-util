@@ -52,6 +52,22 @@ def generate_policy(template_file: str, config: dict):
 
     return rendered
 
+
+def remove_dict_keys(input_dict: dict, remove_keys: list) -> dict:
+    out = input_dict.copy()
+
+    def rm(prop):
+        try:
+            del out[prop]
+        except KeyError:
+            pass
+
+    # remove properties from a TableInfo object returned from get_table to be compatible with put_table
+    for k in remove_keys:
+        rm(k)
+    return out
+
+
 def create_assume_role_doc(aws_principals: list = None, resource: str = None, additional_principals: dict = None):
     document = {
         "Version": "2012-10-17",

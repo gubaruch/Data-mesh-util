@@ -81,29 +81,8 @@ class DataMeshProducer:
                                                        region_name=self._current_region,
                                                        log_level=log_level)
 
-    def _cleanup_table_def(self, table_def: dict, owner_account_id: str):
-        t = table_def.copy()
-
-        def rm(prop):
-            try:
-                del t[prop]
-            except KeyError:
-                pass
-
-        # remove properties from a TableInfo object returned from get_table to be compatible with put_table
-        rm('DatabaseName')
-        rm('CreateTime')
-        rm('UpdateTime')
-        rm('CreatedBy')
-        rm('IsRegisteredWithLakeFormation')
-        rm('CatalogId')
-        rm('Tags')
-
-        t['Owner'] = owner_account_id
-
-        return t
-
-    def _create_mesh_table(self, table_def: dict, data_mesh_glue_client, data_mesh_database_name: str,
+    def _create_mesh_table(self, table_def: dict, data_mesh_glue_client, source_database_name: str,
+                           data_mesh_database_name: str,
                            producer_account_id: str,
                            data_mesh_account_id: str, create_public_metadata: bool = True,
                            expose_table_references_with_suffix: str = "_link"):
@@ -120,7 +99,13 @@ class DataMeshProducer:
         :return:
         '''
         # cleanup the TableInfo object to be usable as a TableInput
-        t = self._cleanup_table_def(table_def=table_def, owner_account_id=producer_account_id)
+        # remove properties from a TableInfo object returned from get_table to be compatible with put_table
+        keys = [
+            'DatabaseName', 'CreateTime', 'UpdateTime', 'CreatedBy', 'IsRegisteredWithLakeFormation', 'CatalogId',
+            'Tags'
+        ]
+        t = utils.remove_dict_keys(input_dict=table_def, remove_keys=keys)
+        t['Owner'] = producer_account_id
 
         self._logger.debug("Existing Table Definition")
         self._logger.debug(t)
@@ -136,6 +121,18 @@ class DataMeshProducer:
             self._logger.info(f"Created new Glue Table {table_name}")
         except data_mesh_glue_client.exceptions.from_code('AlreadyExistsException'):
             self._logger.info(f"Glue Table {table_name} Already Exists")
+
+        table_partitions = self._producer_automator.get_table_partitions(
+            database_name=source_database_name,
+            table_name=table_name
+        )
+
+        if table_partitions is not None and len(table_partitions) > 0:
+            self._mesh_automator.create_table_partition_metadata(
+                database_name=data_mesh_database_name,
+                table_name=table_name,
+                partition_input_list=table_partitions
+            )
 
         # grant access to the producer account
         perms = ['INSERT', 'SELECT', 'ALTER', 'DELETE', 'DESCRIBE']
@@ -345,6 +342,7 @@ class DataMeshProducer:
             created_table = self._create_mesh_table(
                 table_def=table,
                 data_mesh_glue_client=data_mesh_glue_client,
+                source_database_name=source_database_name,
                 data_mesh_database_name=data_mesh_database_name,
                 producer_account_id=self._data_producer_account_id,
                 data_mesh_account_id=self._data_mesh_account_id,
