@@ -16,6 +16,7 @@ from data_mesh_util.lib.ApiAutomator import ApiAutomator
 
 class DataMeshAdmin:
     _region = None
+    _current_identity = None
     _current_credentials = None
     _data_mesh_account_id = None
     _data_producer_account_id = None
@@ -57,12 +58,14 @@ class DataMeshAdmin:
         self._dynamo_resource = self._session.client('dynamodb')
         self._lf_client = self._session.client('lakeformation')
 
+        self._current_identity = self._sts_client.get_caller_identity()
+
         self._logger.setLevel(log_level)
         self._log_level = log_level
         self._automator = ApiAutomator(target_account=data_mesh_account_id, session=self._session,
                                        log_level=self._log_level)
 
-        self._logger.debug("Running as %s" % str(self._sts_client.get_caller_identity()))
+        self._logger.debug("Running as %s" % str(self._current_identity))
 
     def _create_template_config(self, config: dict):
         if config is None:
@@ -324,8 +327,8 @@ class DataMeshAdmin:
             target_account = self._data_producer_account_id
 
         # run a pre-flight check here to check that the caller has data lake admin
-        # self._automator.assert_is_data_lake_admin(
-        #     principal=utils.get_role_arn(account_id=target_account, role_name=local_role_name))
+        self._automator.assert_is_data_lake_admin(
+            principal=self._current_identity.get('Arn'))
 
         self._logger.info(f"Setting up Account {source_account} as a Data {type}")
 

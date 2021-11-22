@@ -578,7 +578,10 @@ class ApiAutomator:
         # go through the policy to find if there's a match on region, consumer principal, and database
         target_statement_index = 0
         statement_match = None
-        missing_tables = tables.copy()
+        missing_tables = []
+        if tables is not None:
+            missing_tables = tables.copy()
+            
         for i, statement in enumerate(policy.get('Statement')):
             if statement is not None and 'AWS' in statement.get('Principal') and consumer_account_id in statement.get('Principal').get('AWS'):
                 # go through the resources to get region and DB match
