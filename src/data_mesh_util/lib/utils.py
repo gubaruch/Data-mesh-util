@@ -68,6 +68,11 @@ def remove_dict_keys(input_dict: dict, remove_keys: list) -> dict:
     return out
 
 
+def get_table_arn(region_name: str, catalog_id: str, database_name: str, table_name: str):
+    # format is arn:aws:glue:region:account-id:table/database name/table name
+    return f"arn:aws:glue:{region_name}:{catalog_id}:table/{database_name}/{table_name}"
+
+
 def create_assume_role_doc(aws_principals: list = None, resource: str = None, additional_principals: dict = None):
     document = {
         "Version": "2012-10-17",

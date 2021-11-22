@@ -434,6 +434,81 @@ class ApiAutomator:
 
         self._logger.info(f"Create {partitions_created} new Table Partitions")
 
+    def load_glue_tables(self, catalog_id: str, source_db_name: str,
+                         table_name_regex: str, load_lf_tags: bool = True):
+        glue_client = self._get_client('glue')
+        lf_client = self._get_client('lakeformation')
+
+        # get the tables which are included in the set provided through args
+        get_tables_args = {
+            'CatalogId': catalog_id,
+            'DatabaseName': source_db_name
+        }
+
+        # add the table filter as a regex matching anything including the provided table
+        if table_name_regex is not None:
+            get_tables_args['Expression'] = table_name_regex
+
+        finished_reading = False
+        last_token = None
+        all_tables = []
+
+        def _no_data():
+            raise Exception("Unable to find any Tables matching %s in Database %s" % (table_name_regex,
+                                                                                      source_db_name))
+
+        while finished_reading is False:
+            if last_token is not None:
+                get_tables_args['NextToken'] = last_token
+
+            try:
+                get_table_response = glue_client.get_tables(
+                    **get_tables_args
+                )
+            except glue_client.exceptions.EntityNotFoundException:
+                _no_data()
+
+            if 'NextToken' in get_table_response:
+                last_token = get_table_response.get('NextToken')
+            else:
+                finished_reading = True
+
+            # add the tables returned from this instance of the request
+            if not get_table_response.get('TableList'):
+                _no_data()
+            else:
+                all_tables.extend(get_table_response.get('TableList'))
+
+        self._logger.info(f"Loaded {len(all_tables)} tables matching {table_name_regex} from Glue")
+
+        # now load all lakeformation tags for the supplied objects
+        if load_lf_tags is True:
+            for t in all_tables:
+                tags = lf_client.get_resource_lf_tags(
+                    CatalogId=catalog_id,
+                    Resource={
+                        'Table': {
+                            'CatalogId': catalog_id,
+                            'DatabaseName': t.get('DatabaseName'),
+                            'Name': t.get('Name')
+                        }
+                    },
+                    ShowAssignedLFTags=True
+                )
+                key = 'LFTagsOnTable'
+                use_tags = {}
+                if tags.get(key) is not None and len(tags.get(key)) > 0:
+                    for table_tag in tags.get(key):
+                        # get all the valid values for the tag in LF
+                        lf_tag = lf_client.get_lf_tag(TagKey=table_tag.get('TagKey'))
+                        use_tags[table_tag.get('TagKey')] = {
+                            'TagValues': table_tag.get('TagValues'),
+                            'ValidValues': lf_tag.get('TagValues')
+                        }
+                    t['Tags'] = use_tags
+
+        return all_tables
+
     def update_glue_catalog_resource_policy(self, region: str, producer_account_id: str, consumer_account_id: str,
                                             database_name: str, tables: list):
         glue_client = self._get_client('glue')
@@ -451,12 +526,9 @@ class ApiAutomator:
             "database_name": database_name,
             'tables': tables
         }
-        # render the table fragment
-        table_list = utils.generate_policy('glue_table_list_fragment.pystache', config=cf).split(',')[
-                     :-1]
 
         # add the table list and generate full policy
-        cf['table_list'] = table_list
+        cf['table_list'] = tables
         policy = json.loads(utils.generate_policy('lf_cross_account_tbac.pystache', config=cf))
 
         policy_condition = None

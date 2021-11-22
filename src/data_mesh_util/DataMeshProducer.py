@@ -177,76 +177,6 @@ class DataMeshProducer:
 
             return table_name, link_table_name
 
-    def _load_glue_tables(self, glue_client, lf_client, catalog_id: str, source_db_name: str, table_name_regex: str):
-        # get the tables which are included in the set provided through args
-        get_tables_args = {
-            'CatalogId': catalog_id,
-            'DatabaseName': source_db_name
-        }
-
-        # add the table filter as a regex matching anything including the provided table
-        if table_name_regex is not None:
-            get_tables_args['Expression'] = table_name_regex
-
-        finished_reading = False
-        last_token = None
-        all_tables = []
-
-        def _no_data():
-            raise Exception("Unable to find any Tables matching %s in Database %s" % (table_name_regex,
-                                                                                      source_db_name))
-
-        while finished_reading is False:
-            if last_token is not None:
-                get_tables_args['NextToken'] = last_token
-
-            try:
-                get_table_response = glue_client.get_tables(
-                    **get_tables_args
-                )
-            except glue_client.exceptions.EntityNotFoundException:
-                _no_data()
-
-            if 'NextToken' in get_table_response:
-                last_token = get_table_response.get('NextToken')
-            else:
-                finished_reading = True
-
-            # add the tables returned from this instance of the request
-            if not get_table_response.get('TableList'):
-                _no_data()
-            else:
-                all_tables.extend(get_table_response.get('TableList'))
-
-        self._logger.info(f"Loaded {len(all_tables)} tables matching {table_name_regex} from Glue")
-
-        # now load all lakeformation tags for the supplied objects
-        for t in all_tables:
-            tags = lf_client.get_resource_lf_tags(
-                CatalogId=catalog_id,
-                Resource={
-                    'Table': {
-                        'CatalogId': catalog_id,
-                        'DatabaseName': t.get('DatabaseName'),
-                        'Name': t.get('Name')
-                    }
-                },
-                ShowAssignedLFTags=True
-            )
-            key = 'LFTagsOnTable'
-            use_tags = {}
-            if tags.get(key) is not None and len(tags.get(key)) > 0:
-                for table_tag in tags.get(key):
-                    # get all the valid values for the tag in LF
-                    lf_tag = lf_client.get_lf_tag(TagKey=table_tag.get('TagKey'))
-                    use_tags[table_tag.get('TagKey')] = {
-                        'TagValues': table_tag.get('TagValues'),
-                        'ValidValues': lf_tag.get('TagValues')
-                    }
-                t['Tags'] = use_tags
-
-        return all_tables
-
     def _make_database_name(self, database_name: str):
         return "%s-%s" % (database_name, self._data_producer_identity.get('Account'))
 
@@ -273,9 +203,7 @@ class DataMeshProducer:
                                                     credentials=self._data_mesh_credentials)
 
         # load the specified tables to be created as data products
-        all_tables = self._load_glue_tables(
-            glue_client=producer_glue_client,
-            lf_client=producer_lf_client,
+        all_tables = self._producer_automator.load_glue_tables(
             catalog_id=self._data_producer_account_id,
             source_db_name=source_database_name,
             table_name_regex=table_name_regex
@@ -441,61 +369,78 @@ class DataMeshProducer:
         tables = subscription.get(TABLE_NAME)
         ram_shares = {}
 
-        # apply a glue catalog resource policy allowing the consumer to access objects by tag
-        self._mesh_automator.update_glue_catalog_resource_policy(
-            region=self._current_region,
-            database_name=subscription.get(DATABASE_NAME),
-            tables=subscription.get(TABLE_NAME),
-            producer_account_id=self._data_mesh_account_id,
-            consumer_account_id=subscription.get(SUBSCRIBER_PRINCIPAL)
-        )
-
+        table_arns = []
         for t in tables:
-            # get the data location for the table
-            data_mesh_glue_client = utils.generate_client(service='glue', region=self._current_region,
-                                                          credentials=self._data_mesh_credentials)
-            table = data_mesh_glue_client.get_table(DatabaseName=subscription.get(DATABASE_NAME), Name=t)
-            table_s3_path = table.get('Table').get('StorageDescriptor').get('Location')
+            # resolve the original database name
+            original_db = subscription.get(DATABASE_NAME).replace(f"-{self._data_producer_account_id}", "")
 
-            # add a bucket policy entry allowing the consumer lakeformation service linked role to perform GetObject*
-            table_bucket = table_s3_path.split("/")[2]
-            self._producer_automator.add_bucket_policy_entry(
-                principal_account=subscription.get(SUBSCRIBER_PRINCIPAL),
-                access_path=table_bucket
+            # get the catalog definition of this table including if its a regex subscription
+            all_tables = self._producer_automator.load_glue_tables(
+                catalog_id=self._data_producer_account_id,
+                source_db_name=original_db,
+                table_name_regex=t,
+                load_lf_tags=False
             )
 
-            # grant describe on the database
-            self._mesh_automator.lf_grant_permissions(
-                data_mesh_account_id=self._data_mesh_account_id,
-                principal=subscription.get(SUBSCRIBER_PRINCIPAL),
+            for resolved_table in all_tables:
+                table_name = resolved_table.get('Name')
+                # get the data location for the table
+                table_s3_path = resolved_table.get('StorageDescriptor').get('Location')
+
+                # add a bucket policy entry allowing the consumer lakeformation service linked role to perform GetObject*
+                table_bucket = table_s3_path.split("/")[2]
+                self._producer_automator.add_bucket_policy_entry(
+                    principal_account=subscription.get(SUBSCRIBER_PRINCIPAL),
+                    access_path=table_bucket
+                )
+
+                # grant describe on the database
+                self._mesh_automator.lf_grant_permissions(
+                    data_mesh_account_id=self._data_mesh_account_id,
+                    principal=subscription.get(SUBSCRIBER_PRINCIPAL),
+                    database_name=subscription.get(DATABASE_NAME),
+                    permissions=['DESCRIBE'],
+                    grantable_permissions=None
+                )
+
+                # grant validated permissions to object
+                self._mesh_automator.lf_grant_permissions(
+                    data_mesh_account_id=self._data_mesh_account_id,
+                    principal=subscription.get(SUBSCRIBER_PRINCIPAL),
+                    database_name=subscription.get(DATABASE_NAME),
+                    table_name=table_name,
+                    permissions=set_permissions,
+                    grantable_permissions=grantable_permissions
+                )
+
+                rs = utils.load_ram_shares(lf_client=data_mesh_lf_client,
+                                           data_mesh_account_id=self._data_mesh_account_id,
+                                           database_name=subscription.get(DATABASE_NAME), table_name=t,
+                                           target_principal=subscription.get(SUBSCRIBER_PRINCIPAL))
+                ram_shares.update(rs)
+
+                # add the shared table arn to the list of ARNs
+                table_arns.append(utils.get_table_arn(region_name=self._current_region,
+                                                      catalog_id=self._data_mesh_account_id,
+                                                      database_name=subscription.get(DATABASE_NAME),
+                                                      table_name=table_name))
+
+                self._logger.info("Subscription RAM Shares")
+                self._logger.info(ram_shares)
+
+            # apply a glue catalog resource policy allowing the consumer to access objects by tag
+            self._mesh_automator.update_glue_catalog_resource_policy(
+                region=self._current_region,
                 database_name=subscription.get(DATABASE_NAME),
-                permissions=['DESCRIBE'],
-                grantable_permissions=None
+                tables=subscription.get(TABLE_ARNS),
+                producer_account_id=self._data_mesh_account_id,
+                consumer_account_id=subscription.get(SUBSCRIBER_PRINCIPAL)
             )
-
-            # grant validated permissions to object
-            self._mesh_automator.lf_grant_permissions(
-                data_mesh_account_id=self._data_mesh_account_id,
-                principal=subscription.get(SUBSCRIBER_PRINCIPAL),
-                database_name=subscription.get(DATABASE_NAME),
-                table_name=t,
-                permissions=set_permissions,
-                grantable_permissions=grantable_permissions
-            )
-
-            rs = utils.load_ram_shares(lf_client=data_mesh_lf_client,
-                                       data_mesh_account_id=self._data_mesh_account_id,
-                                       database_name=subscription.get(DATABASE_NAME), table_name=t,
-                                       target_principal=subscription.get(SUBSCRIBER_PRINCIPAL))
-            ram_shares.update(rs)
-
-            self._logger.info("Subscription RAM Shares")
-            self._logger.info(ram_shares)
 
         # update the subscription to reflect the changes
-        return self._subscription_tracker.update_status(
+        self._subscription_tracker.update_status(
             subscription_id=request_id, status=STATUS_ACTIVE,
-            permitted_grants=grant_permissions, notes=decision_notes, ram_shares=ram_shares
+            permitted_grants=grant_permissions, notes=decision_notes, ram_shares=ram_shares, table_arns=table_arns
         )
 
     def deny_access_request(self, request_id: str,

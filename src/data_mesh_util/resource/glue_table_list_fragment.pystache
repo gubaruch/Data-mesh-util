@@ -1,3 +1,0 @@
-{{#tables}}
-arn:aws:glue:{{region}}:{{producer_account_id}}:table/{{.}},
-{{/tables}}

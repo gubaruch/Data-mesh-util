@@ -25,8 +25,10 @@ DATABASE_NAME = 'DatabaseName'
 TABLE_NAME = 'TableName'
 REQUESTED_GRANTS = 'RequestedGrants'
 PERMITTED_GRANTS = 'PermittedGrants'
+TABLE_ARNS = 'GrantedTableARNs'
 RAM_SHARES = 'RamShares'
 NOTES = 'Notes'
+
 
 class SubType(Enum):
     DATABASE = 1
@@ -289,7 +291,7 @@ class SubscriberTracker:
 
             return None
 
-        def _put_subscription(item:dict):
+        def _put_subscription(item: dict):
             item = self._add_www(item=item)
 
             self._table.put_item(
@@ -309,6 +311,7 @@ class SubscriberTracker:
         }
 
         sub_type = ()
+
         def _return():
             return {
                 "Type": subscription_type,
@@ -495,7 +498,8 @@ class SubscriberTracker:
 
         return self._handle_update(args)
 
-    def update_status(self, subscription_id: str, status: str, permitted_grants: list = None, notes: str = None,
+    def update_status(self, subscription_id: str, status: str, table_arns: list, permitted_grants: list = None,
+                      notes: str = None,
                       ram_shares: dict = None):
         '''
         Updates the status of a subscription. Valid transitions are:
@@ -527,13 +531,15 @@ class SubscriberTracker:
             "Key": {
                 SUBSCRIPTION_ID: subscription_id
             },
-            "UpdateExpression": "SET #status = :status, #permitted = :permitted",
+            "UpdateExpression": "SET #status = :status, #permitted = :permitted, #table_arns = :table_arns",
             "ExpressionAttributeNames": {
                 "#status": STATUS,
-                "#permitted": PERMITTED_GRANTS
+                "#permitted": PERMITTED_GRANTS,
+                "#table_arns": TABLE_ARNS
             },
             "ExpressionAttributeValues": {
-                ":status": status
+                ":status": status,
+                ":table_arns": table_arns
             },
             "ConditionExpression": expected
         }
