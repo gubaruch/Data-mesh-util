@@ -637,13 +637,16 @@ class ApiAutomator:
         s3_client = self._get_client('s3')
 
         try:
-            s3_client.create_bucket(
-                ACL='private',
-                Bucket=self._get_dummy_bucket_name(),
-                CreateBucketConfiguration={
+            args = {
+                "ACL": 'private',
+                "Bucket": self._get_dummy_bucket_name()
+            }
+
+            if aws_region != 'us-east-1':
+                args["CreateBucketConfiguration"] = {
                     'LocationConstraint': aws_region
                 }
-            )
+            s3_client.create_bucket(**args)
         except s3_client.exceptions.BucketAlreadyExists:
             pass
 
@@ -863,8 +866,14 @@ class ApiAutomator:
 
         # create the database
         try:
-            glue_client.create_database(
+            created_db = glue_client.create_database(
                 **args
+            )
+
+            # tag the database with default tags
+            glue_client.tag_resource(
+                ResourceArn=created_db.get('Arn'),
+                TagsToAdd=DEFAULT_TAGS
             )
         except glue_client.exceptions.AlreadyExistsException:
             pass
