@@ -143,6 +143,10 @@ class DataMeshAdmin:
         self._automator.add_datalake_admin(principal=data_mesh_mgr_role_arn)
         self._automator.add_datalake_admin(principal=executing_user_role)
 
+        # force the creation of the lakeformation service linked role if it isn't there already
+        svc_role = self._automator.get_or_create_lf_svc_linked_role(aws_region=self._region)
+        self._logger.info(f"Validated Lake Formation Service Linked Role as {svc_role}")
+
         # turn off IAM permissions on new databases by default
         self._automator.set_default_lf_permissions()
 

@@ -630,6 +630,76 @@ class ApiAutomator:
         if admin_matched is False:
             raise Exception(f"Principal {principal} is not Data Lake Admin")
 
+    def _get_dummy_bucket_name(self):
+        return f"data-mesh-delete-me-{self._target_account}"
+
+    def _create_dummy_bucket(self, aws_region: str):
+        s3_client = self._get_client('s3')
+
+        try:
+            s3_client.create_bucket(
+                ACL='private',
+                Bucket=self._get_dummy_bucket_name(),
+                CreateBucketConfiguration={
+                    'LocationConstraint': aws_region
+                }
+            )
+        except s3_client.exceptions.BucketAlreadyExists:
+            pass
+
+    def _drop_dummy_bucket(self):
+        s3_client = self._get_client('s3')
+
+        s3_client.delete_bucket(
+            Bucket=self._get_dummy_bucket_name()
+        )
+
+    def get_or_create_lf_svc_linked_role(self, aws_region: str):
+        # check if the role already exists
+        iam_client = self._get_client('iam')
+        svc_role = 'AWSServiceRoleForLakeFormationDataAccess'
+        existing_role = None
+        try:
+            existing_role = iam_client.get_role(
+                RoleName=svc_role
+            )
+        except iam_client.exceptions.NoSuchEntityException:
+            pass
+
+        if existing_role is not None and False == True:
+            return existing_role.get('Role').get('Arn')
+        else:
+            # create a dummy bucket in S3
+            self._create_dummy_bucket(aws_region)
+            dummy_s3_arn = utils.convert_s3_path_to_arn(f"s3://{self._get_dummy_bucket_name()}")
+
+            # register the bucket as a data lake location
+            lf_client = self._get_client('lakeformation')
+            try:
+                lf_client.register_resource(
+                    ResourceArn=dummy_s3_arn,
+                    UseServiceLinkedRole=True
+                )
+            except lf_client.exceptions.AlreadyExistsException:
+                pass
+
+            # confirm service linked role exists
+            waiter = iam_client.get_waiter(waiter_name='role_exists')
+            waiter.wait(
+                RoleName=svc_role
+            )
+
+            # drop the data lake location
+            lf_client.deregister_resource(
+                ResourceArn=dummy_s3_arn
+            )
+
+            # drop the bucket
+            self._drop_dummy_bucket()
+
+            # return the role arn
+            return f"arn:aws:iam::{self._target_account}:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess"
+
     def describe_table(self, database_name: str, table_name: str):
         glue_client = self._get_client('glue')
 
