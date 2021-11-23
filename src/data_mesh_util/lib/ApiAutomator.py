@@ -666,7 +666,7 @@ class ApiAutomator:
         except iam_client.exceptions.NoSuchEntityException:
             pass
 
-        if existing_role is not None and False == True:
+        if existing_role is not None:
             return existing_role.get('Role').get('Arn')
         else:
             # create a dummy bucket in S3
