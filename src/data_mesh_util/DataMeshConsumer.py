@@ -137,7 +137,7 @@ class DataMeshConsumer:
         :return:
         '''
         me = self._sts_client.get_caller_identity().get('Account')
-        return self._subscription_tracker.list_subscriptions(principal_id=me)
+        return self._subscription_tracker.list_subscriptions(principal_id=me, request_status=STATUS_ACTIVE)
 
     def delete_subscription(self, subscription_id: str, reason: str):
         '''
