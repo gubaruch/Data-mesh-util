@@ -638,7 +638,7 @@ class ApiAutomator:
             Name=table_name
         )
 
-        return table
+        return table.get('Table')
 
     def lf_grant_permissions(self, data_mesh_account_id: str, principal: str, database_name: str,
                              table_name: str = None,
