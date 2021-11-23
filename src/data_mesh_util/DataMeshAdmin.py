@@ -65,7 +65,7 @@ class DataMeshAdmin:
         self._automator = ApiAutomator(target_account=data_mesh_account_id, session=self._session,
                                        log_level=self._log_level)
 
-        self._logger.debug("Running as %s" % str(self._current_identity))
+        self._logger.debug(f"Running as {self._current_identity.get('Arn')}")
 
     def _create_template_config(self, config: dict):
         if config is None:
