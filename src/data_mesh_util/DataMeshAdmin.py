@@ -143,9 +143,6 @@ class DataMeshAdmin:
         self._automator.add_datalake_admin(principal=data_mesh_mgr_role_arn)
         self._automator.add_datalake_admin(principal=executing_user_role)
 
-        # grant the data mesh manager create database, which should force the creation of the lakeformation service role
-        self._automator.lf_grant_create_db(iam_role_arn=data_mesh_mgr_role_arn)
-
         # turn off IAM permissions on new databases by default
         self._automator.set_default_lf_permissions()
 
