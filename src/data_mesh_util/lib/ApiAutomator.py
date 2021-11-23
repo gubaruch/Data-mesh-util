@@ -581,9 +581,10 @@ class ApiAutomator:
         missing_tables = []
         if tables is not None:
             missing_tables = tables.copy()
-            
+
         for i, statement in enumerate(policy.get('Statement')):
-            if statement is not None and 'AWS' in statement.get('Principal') and consumer_account_id in statement.get('Principal').get('AWS'):
+            if statement is not None and 'AWS' in statement.get('Principal') and consumer_account_id in statement.get(
+                    'Principal').get('AWS'):
                 # go through the resources to get region and DB match
                 for j, resource in enumerate(statement.get('Resource')):
                     # resources will be in format:
@@ -628,6 +629,16 @@ class ApiAutomator:
 
         if admin_matched is False:
             raise Exception(f"Principal {principal} is not Data Lake Admin")
+
+    def describe_table(self, database_name: str, table_name: str):
+        glue_client = self._get_client('glue')
+
+        table = glue_client.get_table(
+            DatabaseName=database_name,
+            Name=table_name
+        )
+
+        return table
 
     def lf_grant_permissions(self, data_mesh_account_id: str, principal: str, database_name: str,
                              table_name: str = None,

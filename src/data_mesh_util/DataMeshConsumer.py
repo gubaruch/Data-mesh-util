@@ -128,13 +128,16 @@ class DataMeshConsumer:
     def get_subscription(self, request_id: str) -> dict:
         return self._subscription_tracker.get_subscription(subscription_id=request_id)
 
+    def get_table_info(self, database_name: str, table_name: str):
+        return self._consumer_automator.describe_table(database_name, table_name)
+
     def list_product_access(self) -> dict:
         '''
         Lists active and pending product access grants.
         :return:
         '''
         me = self._sts_client.get_caller_identity().get('Account')
-        return self._subscription_tracker.list_subscriptions(owner_id=me)
+        return self._subscription_tracker.list_subscriptions(principal_id=me)
 
     def delete_subscription(self, subscription_id: str, reason: str):
         '''
