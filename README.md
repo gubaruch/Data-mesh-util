@@ -95,9 +95,19 @@ you can close the 2 tabs on the top of the page and you can grab the terminal ta
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(8).png)
 
-now , we would like to copy the source code  - **use Git or S3**
+now , we would like to copy the source code from the git repository.
 
-go to the terminal , make sure you are in the data-mesh util directory . and the following command :
+in cloud9 click on the *source control* icon(the one above the aws icon)  and select *clone repository* 
+
+![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image23.png)
+
+for the *Rpository URL* enter : https://github.com/gubaruch/Data-mesh-util.git and click enter.
+
+select the location for the repo, and now you should see the source code in your local cloud9 environment.
+
+![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image24.png)
+
+go to the terminal , make sure you are in the data-mesh util directory . run  the following command :
 
 `pip3 install -r requirements.txt`
 
