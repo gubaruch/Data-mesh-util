@@ -105,37 +105,6 @@ that will install the relevant packages required to run the data mesh util.
 
 Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. The structure of this file is shown below (you must remove comments), or you can start with [sample\_test\_creds.json](https://code.amazon.com/packages/Data-mesh-util/blobs/mainline/--/test/sample_test_creds.json).
 
-{
-  &quot;AWS\_REGION&quot;: &quot;us-east-1&quot;,
-  **must be LF data lake admin in the mesh account**
-  &quot;Mesh&quot;: {
-    &quot;AccountId&quot;: &quot;&quot;,
-    &quot;AccessKeyId&quot;: &quot;&quot;,
-    &quot;SecretAccessKey&quot;: &quot;&quot;
-  },
-  &quot;Producer&quot;: {
-    &quot;AccountId&quot;: &quot;&quot;,
-    &quot;AccessKeyId&quot;: &quot;&quot;,
-    &quot;SecretAccessKey&quot;: &quot;&quot;
-  },
- **must be LF data lake admin in a producer account***
-  &quot;ProducerAdmin&quot;:{
-    &quot;AccountId&quot;: &quot;&quot;,
-    &quot;AccessKeyId&quot;: &quot;&quot;,
-    &quot;SecretAccessKey&quot;: &quot;&quot;
-  },
-  &quot;Consumer&quot;: {
-    &quot;AccountId&quot;: &quot;&quot;,
-    &quot;AccessKeyId&quot;: &quot;&quot;,
-    &quot;SecretAccessKey&quot;: &quot;&quot;
-  },
-  **must be LF data lake admin in a consumer account**
-  &quot;ConsumerAdmin&quot;: {
-    &quot;AccountId&quot;: &quot;&quot;,
-    &quot;AccessKeyId&quot;: &quot;&quot;,
-    &quot;SecretAccessKey&quot;: &quot;&quot;
-  }
-}
 
 This file allows for the configuration of multiple accounts, for the Data Mesh, and then a &quot;normal&quot; user and Administration user for both the producer and consumer. Please note that the keys of this document are reserved and cannot be changed or extended (Mesh, Producer, ProducerAdmin, Consumer, and ConsumerAdmin are all reserved words).
 
