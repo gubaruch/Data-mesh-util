@@ -99,13 +99,13 @@ now , we would like to copy the source code from the git repository.
 
 in cloud9 click on the *source control* icon(the one above the aws icon)  and select *clone repository* 
 
-![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image23.png)
+![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image23.PNG)
 
 for the *Rpository URL* enter : https://github.com/gubaruch/Data-mesh-util.git and click enter.
 
 select the location for the repo, and now you should see the source code in your local cloud9 environment.
 
-![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image24.png)
+![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image24.PNG)
 
 go to the terminal , make sure you are in the data-mesh util directory . run  the following command :
 
