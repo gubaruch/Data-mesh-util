@@ -122,7 +122,7 @@ In general, you should start by configuring administrative users Mesh, ProducerA
 
 Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure.
 
-In the AWS Console, choose the Lake Formation service, and then in the left-hand Nav choose Permissions/Administrative Roles &amp; Tasks. Add the User or Role configured above as data lake administrator:
+In the AWS Console, choose the Lake Formation service,  in the left-hand Nav choose Permissions/Administrative Roles &amp; Tasks. Add the User or Role configured above as data lake administrator:
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(9).png)
 
@@ -160,7 +160,9 @@ please save those in a notepad , and share those with the mesh account owner so 
 
 now go to the search bar and search for **Lakeformation**.
 
-we will now provide datalake admin rights to the user we have just created .
+we will now  provide datalake admin rights to the user we have just created .
+
+choose **add me first** .
 
 click on the left side under Premissions on **Administrative roles and tasks** then click on **Choose administrators.**
 
