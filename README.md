@@ -185,7 +185,11 @@ once those are populated . we can start running the steps .
 
 the first step is to run 0_setup_central_account.py.
 
-go to your termnial window and enter the following :
+go to your termnial window.
+
+make sure you are in the right path : `~/environment/Data-mesh-util/test/reinvent`
+
+once ready, enter the following :
 
 `python 0_setup_central_account.py` and run it .
 
@@ -331,7 +335,7 @@ next we will run the final step which is step number 4 . in step 4 the consumer 
 
 here is an example of how the command should look like :
 
-`python Data-mesh-util/test/reinvent/4_finalize_subscription_and_query.py --subscription_id YJapJ9GUcX5bmqT5fWnyC5`
+`python 4_finalize_subscription_and_query.py --subscription_id YJapJ9GUcX5bmqT5fWnyC5`
 
 you can now log in to the consumer account and verify that the database and tables are seen in lakeformation.
 
