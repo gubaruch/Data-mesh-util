@@ -271,17 +271,17 @@ go to the mash account .
 
 on the mesh account.
 
-we would now prepare to run step 1\_create\_data\_product.py ,  where we will copy the glue catalog to the central mesh account from the producer account.
+we would now prepare to run step 1_create_data_product.py ,  where we will copy the glue catalog to the central mesh account from the producer account.
 
-we first set the enviorment variable same as we did in step 0 ,double clickiing on the 1\_create\_data\_product.py and then clicking on  **ENV  **
+we first set the enviorment variable same as we did in step 0 ,double clickiing on the 1_create_data_product.py and then clicking on  **ENV  **
 
 this is where we create an enviorment file which will point to our ceredntials file. set Name for  **CredentialsFile** and Value to  **/home/ec2-user/environment/Data-mesh-util/test/sample-test-creds.json**
 
-now , we need to tell our script what is the glue database\_name  and what is the table\_regex
+now , we need to tell our script what is the glue database_name  and what is the table_regex
 
 you can add those parameters to the Command line similarly to the below :
 
-`Data-mesh-util/test/reinvent/1\_create\_data\_product.py --database\_name tlc303 --table\_regex usecase\*`
+`Data-mesh-util/test/reinvent/1_create_data_product.py --database_name tlc303 --table_regex usecase*`
 
 once done click on **Run** and script will start running and executing the relevant tasks
 
@@ -295,9 +295,9 @@ step 2 is where the consumer will request access to the data products in the cat
 
 asking for specific tables/databases and what type of premissions are required.
 
-go to the mesh account , and in Cloud9 enviorment click on the left side on the **2\_consumer\_request\_access.py** file
+go to the mesh account , and in Cloud9 enviorment click on the left side on the **2_consumer_request_access.py** file
 
-is you try to run it , you will see it will ask for  - - database\_name , - -tables ,  - - request\_premissions
+is you try to run it , you will see it will ask for  - - database_name , - -tables ,  - - request_premissions
 
 before entering the right parameters , we first set the enviorment variable same as we did in previous steps ,double clickiing on the 2\_consumer\_request\_access and then clicking on  **ENV  **
 
@@ -307,11 +307,11 @@ now we can enter the relevant command , here is an example of how that should lo
 
 in this example we gave only select premisions to the consumer
 
-'Data-mesh-util/test/reinvent/2\_consumer\_request\_access.py --database\_name tlc303guy --tables usecase\* —request\_permissions Select'
+'Data-mesh-util/test/reinvent/2_consumer_request_access.py --database_name tlc303guy --tables usecase* —request_permissions Select'
 
 the subscription will be stored in a dynamodb table.
 
-you can now run  step 2\_5\_list\_pending\_access\_requests.py , before running it set up the **ENV** as you have done in previous steps.
+you can now run  step 2_5_list_pending_access_requests.py , before running it set up the **ENV** as you have done in previous steps.
 
 this will help us see exactly what the pending requests are for the central account to aprove and provide premissions .
 
@@ -321,31 +321,31 @@ here is an example of the output of this step :
 
 now , we are ready for step 3 , granting data product access.
 
-in the cloud9 env , select and click  **3\_grant\_data\_product\_access.py**
+in the cloud9 env , select and click  **3_grant_data_product_access.py**
 
 set the **ENV** file as done in previous steps.
 
-for running the data prdouct access script you need to provide the following arguments are required: --subscription\_id, —grant\_permissions, —approval\_notes.
+for running the data prdouct access script you need to provide the following arguments are required: --subscription_id, —grant_permissions, —approval_notes.
 
-the subscription id can be retrieved from the output of step 2\_5\_list\_pending\_access\_requests , for grant premissions we will provide SELECT premissions .
+the subscription id can be retrieved from the output of step 2_5_list_pending_access_requests , for grant premissions we will provide SELECT premissions .
 
 please save the subscription id  , you will need to use it in step 4 as well .
 
 here is an example of how the command should look like :
 
-`Data-mesh-util/test/reinvent/3\_grant\_data\_product\_access.py --subscription\_id FYbgaTuMXG63RnLsqaWv7m --grant\_permissions SELECT —approval\_notes approved`
+`Data-mesh-util/test/reinvent/3_grant_data_product_access.py --subscription_id FYbgaTuMXG63RnLsqaWv7m --grant_permissions SELECT —approval_notes approved`
 
 once completed , the mesh account provided access to the consumer for the data products.
 
 next we will run the final step which is step number 4 . in step 4 the consumer will approve the resource sharing.
 
-click on  left side  on  **4\_finalize\_subscription\_and\_query.py **
+click on  left side  on  **4_finalize_subscription_and_query.py **
 
 set the **ENV** file as done in previous steps.
 
 here is an example of how the command should look like :
 
-`Data-mesh-util/test/reinvent/4\_finalize\_subscription\_and\_query.py --subscription\_id YJapJ9GUcX5bmqT5fWnyC5`
+`Data-mesh-util/test/reinvent/4_finalize_subscription_and_query.py --subscription_id YJapJ9GUcX5bmqT5fWnyC5`
 
 you can now log in to the consumer account and verify that the database and tables are seen in lakeformation.
 
