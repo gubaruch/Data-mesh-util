@@ -303,7 +303,7 @@ now we can enter the relevant command , here is an example of how that should lo
 
 in this example we gave only select premisions to the consumer.
 
-make sure that your database name is the same database which appears in the Lakeformation console in the mesh account, it should be the *"producer_account_id"_database_name*
+make sure that your database name is the same database name which appears in the Lakeformation console in the mesh account, it should be the *"producer_account_id"_database_name*
 
 `python 2_consumer_request_access.py Data-mesh-util/test/reinvent/2_consumer_request_access.py --database_name 22123456380_tlc303guy --tables usecase* —request_permissions Select`
 
