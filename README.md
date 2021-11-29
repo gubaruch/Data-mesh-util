@@ -223,7 +223,7 @@ we would need to :
 
 go to the AWS producer account
 
-download the datasets from : https://github.com/gubaruch/TLC303_reinvent2021/tree/main/workshop
+download the datasets from : https://github.com/gubaruch/Data-mesh-util/tree/mainline/workshop
 create an S3 bucket and upload the 3 datasets , you should have the following folder structure :
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(17).png)
