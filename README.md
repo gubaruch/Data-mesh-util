@@ -301,9 +301,11 @@ if you try to run it , you will see it will ask for  - - database_name , - -tabl
 
 now we can enter the relevant command , here is an example of how that should look like :
 
-in this example we gave only select premisions to the consumer
+in this example we gave only select premisions to the consumer.
 
-`python 2_consumer_request_access.py Data-mesh-util/test/reinvent/2_consumer_request_access.py --database_name tlc303guy --tables usecase* —request_permissions Select`
+make sure that your database name is the same database which appears in the Lakeformation console in the mesh account, it should be the *"producer_account_id"_database_name*
+
+`python 2_consumer_request_access.py Data-mesh-util/test/reinvent/2_consumer_request_access.py --database_name 22123456380_tlc303guy --tables usecase* —request_permissions Select`
 
 the subscription will be stored in a dynamodb table.
 
