@@ -183,11 +183,11 @@ the Mesh, Producer Admin and Consumer Admin are the ones which should be populat
 
 once those are populated . we can start running the steps .
 
-the first step is 0\_setup\_central\_account.py , click on the file and on the right side of the screen select **ENV.**
+the first step is to run 0_setup_central_account.py.
 
-this is where we create an enviorment file which will point to our ceredntials file. set Name for  **CredentialsFile** and Value to  **/home/ec2-user/environment/Data-mesh-util/test/sample-test-creds.json**
+go to your termnial window and enter the following :
 
-once done click on **Run** and script will start running and executing the relevant tasks
+`python 0_setup_central_account.py` and run it .
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(16).png)
 
@@ -271,19 +271,15 @@ go to the mash account .
 
 on the mesh account.
 
-we would now prepare to run step 1_create_data_product.py ,  where we will copy the glue catalog to the central mesh account from the producer account.
+we would now run step 1_create_data_product.py ,  where we will copy the glue catalog to the central mesh account from the producer account.
 
-we first set the enviorment variable same as we did in step 0 ,double clickiing on the 1_create_data_product.py and then clicking on  **ENV  **
-
-this is where we create an enviorment file which will point to our ceredntials file. set Name for  **CredentialsFile** and Value to  **/home/ec2-user/environment/Data-mesh-util/test/sample-test-creds.json**
-
-now , we need to tell our script what is the glue database_name  and what is the table_regex
+we need to tell our script what is the glue database_name  and what is the table_regex
 
 you can add those parameters to the Command line similarly to the below :
 
-`Data-mesh-util/test/reinvent/1_create_data_product.py --database_name tlc303 --table_regex usecase*`
+`python 1_create_data_product.py Data-mesh-util/test/reinvent/1_create_data_product.py --database_name tlc303 --table_regex usecase*`
 
-once done click on **Run** and script will start running and executing the relevant tasks
+the script will start running and executing the relevant tasks.
 
 once done , you can go to the mesh account , and validate you a database and tables were created in the central catalog :
 
@@ -291,27 +287,23 @@ once done , you can go to the mesh account , and validate you a database and tab
 
 now that we have central catalog in place , we can run step 2 .
 
-step 2 is where the consumer will request access to the data products in the catalog , he will do that by subscription model
+step 2 is where the consumer will request access to the data products in the catalog , he will do that by a subscription model
 
 asking for specific tables/databases and what type of premissions are required.
 
-go to the mesh account , and in Cloud9 enviorment click on the left side on the **2_consumer_request_access.py** file
+in the Cloud9 enviorment go to your termnial tab.
 
-is you try to run it , you will see it will ask for  - - database_name , - -tables ,  - - request_premissions
-
-before entering the right parameters , we first set the enviorment variable same as we did in previous steps ,double clickiing on the 2\_consumer\_request\_access and then clicking on  **ENV  **
-
-this is where we create an enviorment file which will point to our ceredntials file. set Name for  **CredentialsFile** and Value to  **/home/ec2-user/environment/Data-mesh-util/test/sample-test-creds.json**
+if you try to run it , you will see it will ask for  - - database_name , - -tables ,  - - request_premissions
 
 now we can enter the relevant command , here is an example of how that should look like :
 
 in this example we gave only select premisions to the consumer
 
-'Data-mesh-util/test/reinvent/2_consumer_request_access.py --database_name tlc303guy --tables usecase* —request_permissions Select'
+`python 2_consumer_request_access.py Data-mesh-util/test/reinvent/2_consumer_request_access.py --database_name tlc303guy --tables usecase* —request_permissions Select`
 
 the subscription will be stored in a dynamodb table.
 
-you can now run  step 2_5_list_pending_access_requests.py , before running it set up the **ENV** as you have done in previous steps.
+you can now run  step 2_5_list_pending_access_requests.py.
 
 this will help us see exactly what the pending requests are for the central account to aprove and provide premissions .
 
@@ -321,10 +313,6 @@ here is an example of the output of this step :
 
 now , we are ready for step 3 , granting data product access.
 
-in the cloud9 env , select and click  **3_grant_data_product_access.py**
-
-set the **ENV** file as done in previous steps.
-
 for running the data prdouct access script you need to provide the following arguments are required: --subscription_id, —grant_permissions, —approval_notes.
 
 the subscription id can be retrieved from the output of step 2_5_list_pending_access_requests , for grant premissions we will provide SELECT premissions .
@@ -333,19 +321,17 @@ please save the subscription id  , you will need to use it in step 4 as well .
 
 here is an example of how the command should look like :
 
-`Data-mesh-util/test/reinvent/3_grant_data_product_access.py --subscription_id FYbgaTuMXG63RnLsqaWv7m --grant_permissions SELECT —approval_notes approved`
+`python 3_grant_data_product_access.py --subscription_id FYbgaTuMXG63RnLsqaWv7m --grant_permissions SELECT —approval_notes approved`
 
 once completed , the mesh account provided access to the consumer for the data products.
 
 next we will run the final step which is step number 4 . in step 4 the consumer will approve the resource sharing.
 
-click on  left side  on  **4_finalize_subscription_and_query.py **
 
-set the **ENV** file as done in previous steps.
 
 here is an example of how the command should look like :
 
-`Data-mesh-util/test/reinvent/4_finalize_subscription_and_query.py --subscription_id YJapJ9GUcX5bmqT5fWnyC5`
+`python Data-mesh-util/test/reinvent/4_finalize_subscription_and_query.py --subscription_id YJapJ9GUcX5bmqT5fWnyC5`
 
 you can now log in to the consumer account and verify that the database and tables are seen in lakeformation.
 
