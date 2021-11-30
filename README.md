@@ -148,6 +148,7 @@ b. Each user in his AWS account , will create an IAM user and will provide the r
 
 c. Log in to your AWS console
 
+
 d. Search for IAM , in the search bar and select IAM.
 
 e. We will now create the users which are needed for the data mesh util.
@@ -246,7 +247,7 @@ in the search bar ,search for *cloudshell* and select it .
 
 once the shell is ready , create an s3 bucket by running the following command:
 
-`aws s3 mb --bucket_name`
+`aws s3 mb s3://<your_unique_bucket_name>`
 
 make sure you are creating a bucket fith a unique name like TLC303_<account_id)
 
@@ -260,9 +261,17 @@ then run :
 
 `unzip tlc303datasets.zip`
 
+Add a folder called workshop in the path as shown below using the right click method 'Add Folder' on the 'tlc303datasets' folder. Then move the folders beggining with 'usecase*' under the workshop folder (drag and drop them).
+
+The resulting folder structure should look as below:
+
+
+<img width="376" alt="Screenshot 2021-11-30 at 07 04 24" src="https://user-images.githubusercontent.com/94520103/144072177-f6b15e1d-43cc-47f2-abc3-543e87866271.png">
+
+
 then we can sync and copy the datasets to the s3 bucket we created :
 
-`s3 sync tlc303datasets s3://<enter-your-s3-bucket-name`
+`aws s3 sync tlc303datasets s3://<enter-your-s3-bucket-name`
 
 in the search bar look for *amazon s3* .
 
@@ -270,8 +279,7 @@ in the s3 console find the bucket you had just created .
 
 verify that directory structure looks as per the below :
 
-![](https://github.com/gubaruch/Data-mesh-util/blob/mainline/doc/image25.PNG)
-
+<img width="553" alt="image" src="https://user-images.githubusercontent.com/94520103/144072361-81e77366-e57e-4217-90a1-ea2e9f7ab49f.png">
 
 
 Run the AWS Glue crawler to discover the schemas and build a glue catalog:
@@ -323,11 +331,16 @@ on the mesh account.
 
 we would now run step 1_create_data_product.py ,  where we will copy the glue catalog to the central mesh account from the producer account.
 
+Navigate to the folder `/environment/Data-mesh-util/test/reinvent` on the command window.
+
+
 we need to tell our script what is the glue database_name  and what is the table_regex
 
 you can add those parameters to the Command line similarly to the below :
 
-`python 1_create_data_product.py Data-mesh-util/test/reinvent/1_create_data_product.py --database_name tlc303 --table_regex usecase*`
+Run the following cli command
+
+`python 1_create_data_product.py --database_name <your database name> --table_regex usecase*`
 
 the script will start running and executing the relevant tasks.
 
@@ -349,13 +362,17 @@ now we can enter the relevant command , here is an example of how that should lo
 
 in this example we gave only select premisions to the consumer.
 
-make sure that your database name is the same database name which appears in the Lakeformation console in the mesh account, it should be the *"producer_account_id"_database_name*
+make sure that your database name is the same database name which appears in the Lakeformation console in the mesh account, it should be in the format database_name-account_id
 
-`python 2_consumer_request_access.py Data-mesh-util/test/reinvent/2_consumer_request_access.py --database_name 22123456380_tlc303guy --tables usecase* —request_permissions Select`
+Run the following command:
+
+`python 2_consumer_request_access.py --database_name <database from the central mesh account> --tables usecase* --request_permissions Select`
 
 the subscription will be stored in a dynamodb table.
 
-you can now run  step 2_5_list_pending_access_requests.py.
+you can now run  step 2_5_list_pending_access_requests.py using the following command:
+
+`python 2_5_list_pending_access_requests.py`
 
 this will help us see exactly what the pending requests are for the central account to aprove and provide premissions .
 
@@ -371,9 +388,9 @@ the subscription id can be retrieved from the output of step 2_5_list_pending_ac
 
 please save the subscription id  , you will need to use it in step 4 as well .
 
-here is an example of how the command should look like :
+here is an example of how the command should look like (use the subscription id that was retrieved in the previous step :
 
-`python 3_grant_data_product_access.py --subscription_id FYbgaTuMXG63RnLsqaWv7m --grant_permissions SELECT —approval_notes approved`
+`python 3_grant_data_product_access.py --subscription_id <your_subscription_id> --grant_permissions SELECT --approval_notes approved`
 
 once completed , the mesh account provided access to the consumer for the data products.
 
@@ -383,7 +400,7 @@ next we will run the final step which is step number 4 . in step 4 the consumer 
 
 here is an example of how the command should look like :
 
-`python 4_finalize_subscription_and_query.py --subscription_id YJapJ9GUcX5bmqT5fWnyC5`
+`python 4_finalize_subscription_and_query.py --subscription_id <your subsciption_id>`
 
 you can now log in to the consumer account and verify that the database and tables are seen in lakeformation.
 
