@@ -2,13 +2,13 @@
 
 Welcome to TLC303 !
 
-before we get started , make sure your wifi is working properly .
+Before we get started , make sure your wifi is working properly.
 
-you would need to work in teams of 3 , find yourself two people who are sitting next to you , those will be your partners for this session. in order to build the data mesh architecture which we will then use as a foundation for telcolake use cases , we need to have 3 AWS accounts , which we will provide. based on your seating order , the leftmost person will be the Producer account , the one sitting in the middle will be Central data mesh account , and the person on the right will be the consumer account.
+You would need to work in teams of 3 , find yourself two people who are sitting next to you , those will be your partners for this session. In order to build the data mesh architecture which we will then use as a foundation for telcolake use cases , you need to have 3 AWS accounts , which we will provide. Based on your seating order , the leftmost person will own the Producer account , the one sitting in the middle will own the Central data mesh account , and the person on the right will own the consumer account.
 
-Producer→Data Mesh(Central) → Consumer
+Producer → Data Mesh(Central) → Consumer
 
-after we finish the part of building a data mesh architecture , most of the focus will be on building 3 different telco use cases , leveraging the different datasets , hence you can then work together on the consumer account as a team .
+After we finish the part of building a data mesh architecture , most of the focus will be on building 3 different telco use cases , leveraging the different datasets. hence, when you get to the use cases part, you can work together on the consumer account as a team.
 
 The AWS Data Mesh Helper library provides automation around the most common tasks that customers need to perform to implement a data mesh architecture on AWS. A data mesh on AWS uses a central AWS Account (the mesh account) to store the metadata associated with **Data Products** created by data **Producers**. This allows other AWS Accounts to act as **Consumers** , and to request **Subscriptions** , which must be approved by **Producers**. Upon approval, the approved grants are provided to the **Consumer** and can be used within their AWS Account.
 
@@ -35,83 +35,82 @@ In this architecture, we can see that the data mesh is configured in AWS Account
 - DataMeshAdminConsumer: IAM Role enabling the assuming Identity to act as a **Consumer**
 - DataMeshAdminReadOnly: IAM Role that can be used for reading Metadata from the Data Mesh Account (only)
 
-For testing and simplicity, every IAM Role in the solution is accompanied by a single IAM User who is a member of a Group specific to the function. This will enable you to add users to this Group should you wish to, rather than using a programmatic approach. IAM Roles are backed by an IAM Policy of the same name as the Role, and all objects in the IAM stack for AWS Data Mesh reside at path _/AwsDataMesh/_.
-
-You can then see that there is a Producer Account 111111111111 who has been enabled to act as a **Producer**. Within this account we see a similar approach to IAM principals, with the creation of a DataMeshProducer IAM Role which is accompanied by an associated user and group. When configured, the DataMeshProducer group is granted rights to assume the DataMeshProducer-\&lt;account id\&gt; role in the data mesh Account.
-
-Similarly, we have a consumer Account 999999999999. This Account also includes IAM objects to enable data mesh access, including the DataMeshConsumer IAM Role, and associated IAM users and groups. Only the DataMeshConsumer role may assume the DataMeshAdminConsumer-\&lt;account id\&gt; role in the data mesh Account.
-
-All information around current or pending subscriptions is stored in DynamoDB, in table AwsDataMeshSubscriptions. This table is secured for only those operations which Producers or Consumer roles are allowed to execute, and stores the overall lifecycle for Subscriptions.
-
-under the home directory  \Data-mesh-util\test\reinvent you will find various tests that show the functionality of the Data Mesh Utility, including:
-
-- data\_mesh\_account\_tests.py: Tests which set up the central Data Mesh Account
-- producer\_account\_tests.py: Tests for the Producer side of data production creation and subscription access
-- consumer\_account\_tests.py: Tests for a Consumer to request access to a product and import subscription objects
-- integration.py: Full integration test showing configuration of the central mesh account, creation of a data product, request of access, and granting access for a consumer.
-
 
 ## Getting started with Event Engine
 
-open your web browser and enter the following URL : [https://dashboard.eventengine.run/login](https://dashboard.eventengine.run/login)
+
+1. Open your web browser and enter the following URL : [https://dashboard.eventengine.run/login](https://dashboard.eventengine.run/login)
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(4).png)
 
-please enter the Event Hash that will be provided .
 
-Choose &quot;Email One-Time Password (OTP&quot;)&quot;
+2. Please enter the Event Hash that will be provided .
 
-enter your email address
 
-you should receive an email with your one time password , copy the password and paste it in the right location .
+3. Choose &quot;Email One-Time Password (OTP&quot;)&quot;
 
-once done you should see the following page :
+
+4. Enter your email address
+
+
+5. You should receive an email with your one time password , copy the password and paste it in the right location .
+
+Once done you should see the following page :
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(5).png)
 
-click on &quot;AWS Console&quot; and then on &quot;Open AWS console&quot;. that should open up the AWS console , and you should be good to start the workshop !
 
-first we will need to start by setting up an IDE which will be used for us to run the datamesh scripts . for that we will use AWS cloud9.
+6. Click on &quot;AWS Console&quot; and then on &quot;Open AWS console&quot;. that should open up the AWS console , and you should be good to start the workshop !
 
-from the search bar , search for cloud9 and click on it .
+
+7. First we will need to start by setting up an IDE which will be used for us to run the datamesh scripts. For that we will use AWS cloud9.
+
+From the search bar, search for cloud9 and click on it .
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(6).png)
 
-click on **Create Environment**
 
-Choose a name for the environment and click **Next Step**
+8. Click on **Create Environment**
 
-change the instance type to **t3.small**
 
-click on **Next Step**
+9. Choose a name for the environment and click **Next Step**
 
-verify the details are correct and click on **Create Environment**
 
-the cloud9 will take a couple of minutes to load , once done you should see the following screen :
+10. Change the instance type to **t3.small**
+
+Click on **Next Step**
+
+Verify the details are correct and click on **Create Environment**
+
+The cloud9 will take a couple of minutes to load , once done you should see the following screen :
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(7).png)
 
-you can close the 2 tabs on the top of the page and you can grab the terminal tab on the bottom and extend it :
+You can close the 2 tabs on the top of the page and you can grab the terminal tab on the bottom and extend it :
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(8).png)
 
-now , we would like to copy the source code from the git repository.
 
-in cloud9 click on the *source control* icon(the one above the aws icon)  and select *clone repository* 
+11. Now , we would like to copy the source code from the git repository.
+
+In cloud9 click on the *source control* icon(the one above the aws icon)  and select *clone repository* 
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image23.PNG)
 
-for the *Rpository URL* enter : https://github.com/gubaruch/Data-mesh-util.git and click enter.
 
-select the location for the repo, and now you should see the source code in your local cloud9 environment.
+12. For the *Rpository URL* enter : https://github.com/gubaruch/Data-mesh-util.git and click enter.
+
+Select the location for the repo, and now you should see the source code in your local cloud9 environment.
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image24.PNG)
 
-go to the terminal , make sure you are in the data-mesh util directory . run  the following command :
+
+13. Go to the terminal , make sure you are in the data-mesh util directory . run  the following command :
 
 `pip3 install -r requirements.txt`
 
-that will install the relevant packages required to run the data mesh util.
+
+14. That will install the relevant packages required to run the data mesh util.
 
 Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. The structure of this file is shown below (you must remove comments), or you can start with [sample\_test\_creds.json](https://code.amazon.com/packages/Data-mesh-util/blobs/mainline/--/test/sample_test_creds.json).
 
@@ -120,108 +119,113 @@ This file allows for the configuration of multiple accounts, for the Data Mesh, 
 
 In general, you should start by configuring administrative users Mesh, ProducerAdmin, and ConsumerAdmin administrators. You can then setup the core Data Mesh functionality, and then add Producer and Consumer entries from the respective accounts after enabling Access Keys for the created DataMeshProducer and DataMeshConsumer sample users.
 
-Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure.
 
-In the AWS Console, choose the Lake Formation service, and then in the left-hand Nav choose Permissions/Administrative Roles &amp; Tasks. Add the User or Role configured above as data lake administrator:
+15. Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure.
+
+a. In the AWS Console, choose the Lake Formation service, and then in the left-hand Nav choose Permissions/Administrative Roles &amp; Tasks. Add the User or Role configured above as data lake administrator:
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(9).png)
 
 ![](Rhttps://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(10).png)
 
-each user in his AWS account , will create an IAM user and will provide the relevant details , which will be populated in the datamesh account.
+b. Each user in his AWS account , will create an IAM user and will provide the relevant details , which will be populated in the datamesh account.
 
-log in to your AWS console
+c. Log in to your AWS console
 
-search for IAM , in the search bar and select IAM.
+d. Search for IAM , in the search bar and select IAM.
 
-we will now create the users which are needed for the data mesh util.
+e. We will now create the users which are needed for the data mesh util.
 
-select **Users** and then **add users **
+f. Select **Users** and then **add users **
 
-enter a user name , and try to make it identifiable - Producer for the producer account , consumer for the consumer account ,central/mesh for central account
+g. Enter a user name, and try to make it identifiable - Producer for the producer account , Consumer for the consumer account,Central/Mesh for central account
 
-under select AWS access type , select  **Access key - Programmatic access** and click **next:permissions**
+h. Under select AWS access type , select  **Access key - Programmatic access** and click **next:permissions**
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(11).png)
 
-under Set permissions , click on **Attach existing policies directly** and checkbox **AdministratorAccess**
+i. Under Set permissions , click on **Attach existing policies directly** and checkbox **AdministratorAccess**
 
-click on **Next:Tags**
+j. Click on **Next:Tags**
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(12).png)
 
-click **Next** and in the last step **Create User**
+k. Click **Next** and in the last step **Create User**
 
-once the user has been created, you will see a page showing the Access key ID and the secret access key .
+l. Once the user has been created, you will see a page showing the Access key ID and the secret access key .
 
-please save those in a notepad , and share those with the mesh account owner so he can then populate the credentials file
+m. Please save those in a notepad , and share those with the mesh account owner so he can then populate the credentials file
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(13).png)
 
-now go to the search bar and search for **Lakeformation**.
 
-we will now provide datalake admin rights to the user we have just created .
+16. Now go to the search bar and search for **Lakeformation**.
 
-click on the left side under Premissions on **Administrative roles and tasks** then click on **Choose administrators.**
+We will now provide datalake admin rights to the user we have just created .
 
-select the relevant user which you have created and click **Save**
+Click on the left side under Premissions on **Administrative roles and tasks** then click on **Choose administrators.**
+
+Select the relevant user which you have created and click **Save**
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(14).png)
 
-once done you should see that the IAM user now is a Data lake administrator:
+Once done you should see that the IAM user now is a Data lake administrator:
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(15).png)
 
-on the mesh account , in cloud9 , open the  **/Data-mesh-util/test/sample-test-creds.json** file
 
-the Mesh, Producer Admin and Consumer Admin are the ones which should be populated .
+17. On the mesh account , in cloud9 , open the  **/Data-mesh-util/test/sample-test-creds.json** file
+
+The Mesh, Producer Admin and Consumer Admin sections are the ones which should be populated .
 
 once those are populated . we can start running the steps .
 
-the first step is 0\_setup\_central\_account.py , click on the file and on the right side of the screen select **ENV.**
+the first step is 0\setup\central\account.py , click on the file and on the right side of the screen select **ENV.**
 
-this is where we create an enviorment file which will point to our ceredntials file. set Name for  **CredentialsFile** and Value to  **/home/ec2-user/environment/Data-mesh-util/test/sample-test-creds.json**
+This is where we create an enviorment file which will point to our ceredntials file. Set Name for  **CredentialsFile** and Value to  **/home/ec2-user/environment/Data-mesh-util/test/sample-test-creds.json**
 
-once done click on **Run** and script will start running and executing the relevant tasks
+Once done click on **Run** and script will start running and executing the relevant tasks
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(16).png)
 
-once the first step was completed , you should see in the output ,the last line as :
+Once the first step was completed , you should see in the output ,the last line as :
 
 Enabled Account xxxxxxxxxxxxx assume DataMeshAdminReadOnly
 
 xxxxxxxxxxx should be your AWS consumer account ID.
 
-go to your AWS producer/consumer accounts .
 
-go to IAM , you should see a DataMeshProducer user  on the producer account and a DataMeshConsumer user in the consumer account.
+18. Go to your AWS producer/consumer accounts.
 
-click on the on the **user name **
+Go to IAM, you should see a DataMeshProducer user on the producer account and a DataMeshConsumer user in the consumer account.
 
-select the **security credentials** tab
+Click on the on the **user name **
 
-click on the **create access keys** button
+Select the **security credentials** tab
 
-make sure you copy the **Access key ID** and the **Secret access key **
+Click on the **create access keys** button
 
-the mesh account owner can now populate the producer and consumer account and credentials details .
+Make sure you copy the **Access key ID** and the **Secret access key **
 
-once done you should now have the credentials file fully populated .
+The mesh account owner can now populate the producer and consumer account and credentials details.
 
-next step is to download the 3 datasets that we will be using for our telecom use cases.
+Once done you should now have the credentials file fully populated .
 
-we would need to :
 
-go to the AWS producer account
+19. Next step is to download the 3 datasets that we will be using for our telecom use cases.
 
-download the datasets from : https://github.com/gubaruch/TLC303_reinvent2021/tree/main/workshop
+We would need to :
+
+Go to the AWS producer account
+
+Download the datasets from : https://github.com/gubaruch/TLC303_reinvent2021/tree/main/workshop
 create an S3 bucket and upload the 3 datasets , you should have the following folder structure :
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(17).png)
 
-run the AWS Glue crawler to discover the schemas and build a glue catalog:
+Run the AWS Glue crawler to discover the schemas and build a glue catalog:
 
-in the search bar type glue and select **AWS Glue**
+In the search bar type glue and select **AWS Glue**
 
 click on **Crawlers** under **Data catalog**
 
