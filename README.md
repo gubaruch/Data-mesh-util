@@ -400,3 +400,5 @@ The other one is a resource link created and owned by the consumer account .  th
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(22).png)
 
 **Congratulations!! you have now setup the datamesh architecture across the Producer, Consumer and Central governance account. You are now ready to progress to the use cases section of the workshop. Follow the link below**
+
+https://github.com/ajayravindranathan/tlc303
