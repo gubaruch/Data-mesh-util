@@ -120,8 +120,7 @@ This command will donwload the source code to your cloud9 environment.
 
 14. That will install the relevant packages required to run the data mesh util.
 
-15. Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. The structure of this file is shown below (you must remove comments), or you can start with [sample\_test\_creds.json](https://code.amazon.com/packages/Data-mesh-util/blobs/mainline/--/test/sample_test_creds.json).
-
+15. Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. this file is located in the following path :/Data-mesh-util/test/sample-test-creds.json
 
 This file allows for the configuration of multiple accounts, for the Data Mesh, and then a &quot;normal&quot; user and Administration user for both the producer and consumer. Please note that the keys of this document are reserved and cannot be changed or extended (Mesh, Producer, ProducerAdmin, Consumer, and ConsumerAdmin are all reserved words).
 
