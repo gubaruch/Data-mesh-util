@@ -251,12 +251,6 @@ Then run :
 
 `unzip tlc303datasets.zip`
 
-Add a folder called workshop in the path as shown below using the right click method 'Add Folder' on the 'tlc303datasets' folder. Then move the folders beggining with 'usecase*' under the workshop folder (drag and drop them).
-
-The resulting folder structure should look as below:
-
-
-<img width="376" alt="Screenshot 2021-11-30 at 07 04 24" src="https://user-images.githubusercontent.com/94520103/144072177-f6b15e1d-43cc-47f2-abc3-543e87866271.png">
 
 
 Then we can sync and copy the datasets to the s3 bucket we created :
@@ -266,6 +260,10 @@ Then we can sync and copy the datasets to the s3 bucket we created :
 In the search bar look for *amazon s3* .
 
 In the s3 console find the bucket you had just created .
+
+create a directory named *workshop*
+
+move all the sub directories to that *workshop* folder.
 
 Verify that directory structure looks as per the below :
 
