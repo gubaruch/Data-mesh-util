@@ -1,9 +1,6 @@
-# TLC303 tutorial
+# TLC303 Part 1 - Telco Data Mesh Tutorial
 
-Welcome to TLC303 !
-
-before we get started , make sure your wifi is working properly .
-
+## Introduction
 you would need to work in teams of 3 , find yourself two people who are sitting next to you , those will be your partners for this session. in order to build the data mesh architecture which we will then use as a foundation for telcolake use cases , we need to have 3 AWS accounts , which we will provide. based on your seating order , the leftmost person will be the Producer account , the one sitting in the middle will be Central data mesh account , and the person on the right will be the consumer account.
 
 Producer→Data Mesh(Central) → Consumer
