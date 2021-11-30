@@ -167,7 +167,7 @@ m. Please save those in a notepad , and share those with the mesh account owner 
 
 
 
-16. Now go to the search bar and search for **Lakeformation**.
+16. Now go to the search bar and search for **Lake formation**.
 
 We will now provide datalake admin rights to the user we have just created .
 
