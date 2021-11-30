@@ -97,20 +97,18 @@ You can close the 2 tabs on the top of the page and you can grab the terminal ta
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(8).png)
 
 
-now , we would like to clone the source code from the git repository.
+11. Now , we would like to clone the source code from the git repository.
 
-in the terminal window:
+In the terminal window:
 
-make sure you are on the following path : */home/ec2-user/environment*
+Make sure you are on the following path : */home/ec2-user/environment*
 
 write :`git clone https://github.com/gubaruch/Data-mesh-util.git` 
 
-this command will donwload the source code to your cloud9 environment.
+This command will donwload the source code to your cloud9 environment.
 
 
-12. For the *Rpository URL* enter : https://github.com/gubaruch/Data-mesh-util.git and click enter.
-
-Select the location for the repo, and now you should see the source code in your local cloud9 environment.
+12. Select the location for the repo, and now you should see the source code in your local cloud9 environment.
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image24.PNG)
 
@@ -122,7 +120,7 @@ Select the location for the repo, and now you should see the source code in your
 
 14. That will install the relevant packages required to run the data mesh util.
 
-Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. The structure of this file is shown below (you must remove comments), or you can start with [sample\_test\_creds.json](https://code.amazon.com/packages/Data-mesh-util/blobs/mainline/--/test/sample_test_creds.json).
+15. Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. The structure of this file is shown below (you must remove comments), or you can start with [sample\_test\_creds.json](https://code.amazon.com/packages/Data-mesh-util/blobs/mainline/--/test/sample_test_creds.json).
 
 
 This file allows for the configuration of multiple accounts, for the Data Mesh, and then a &quot;normal&quot; user and Administration user for both the producer and consumer. Please note that the keys of this document are reserved and cannot be changed or extended (Mesh, Producer, ProducerAdmin, Consumer, and ConsumerAdmin are all reserved words).
@@ -135,7 +133,7 @@ In general, you should start by configuring administrative users Mesh, ProducerA
 
 
 
-15. Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure.
+Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure.
 
 a. In the AWS Console, choose the Lake Formation service, and then in the left-hand Nav choose Permissions/Administrative Roles &amp; Tasks. Add the User or Role configured above as data lake administrator:
 
@@ -243,21 +241,21 @@ We would need to :
 
 Go to the AWS producer account
 
-in the search bar ,search for *cloudshell* and select it .
+In the search bar ,search for *cloudshell* and select it .
 
-once the shell is ready , create an s3 bucket by running the following command:
+Once the shell is ready , create an s3 bucket by running the following command:
 
 `aws s3 mb s3://<your_unique_bucket_name>`
 
-make sure you are creating a bucket fith a unique name like TLC303_<account_id)
+Make sure you are creating a bucket fith a unique name like TLC303_<account_id)
 
-once done , we can download the datasets and the datasets directory strcuture into that s3 bucket which you have created.
+Once done , we can download the datasets and the datasets directory strcuture into that s3 bucket which you have created.
 
-enter the following command to download a compressed zip file which contains the different datasets :
+Enter the following command to download a compressed zip file which contains the different datasets :
 
 `wget https://d29eh26mh9ajut.cloudfront.net/tlc303datasets.zip`
 
-then run : 
+Then run : 
 
 `unzip tlc303datasets.zip`
 
@@ -269,96 +267,89 @@ The resulting folder structure should look as below:
 <img width="376" alt="Screenshot 2021-11-30 at 07 04 24" src="https://user-images.githubusercontent.com/94520103/144072177-f6b15e1d-43cc-47f2-abc3-543e87866271.png">
 
 
-then we can sync and copy the datasets to the s3 bucket we created :
+Then we can sync and copy the datasets to the s3 bucket we created :
 
 `aws s3 sync tlc303datasets s3://<enter-your-s3-bucket-name`
 
-in the search bar look for *amazon s3* .
+In the search bar look for *amazon s3* .
 
-in the s3 console find the bucket you had just created .
+In the s3 console find the bucket you had just created .
 
-verify that directory structure looks as per the below :
+Verify that directory structure looks as per the below :
 
 <img width="553" alt="image" src="https://user-images.githubusercontent.com/94520103/144072361-81e77366-e57e-4217-90a1-ea2e9f7ab49f.png">
 
 
-Run the AWS Glue crawler to discover the schemas and build a glue catalog:
+20. Run the AWS Glue crawler to discover the schemas and build a glue catalog:
 
 In the search bar type glue and select **AWS Glue**
 
-click on **Crawlers** under **Data catalog**
+Click on **Crawlers** under **Data catalog**
 
-click on **Add crawler**
+Click on **Add crawler**
 
-enter a **Crawler name** and click **next **
+Enter a **Crawler name** and click **next **
 
-click **next** again
+Click **next** again
 
-select the s3 path where the datasets for the use cases are located under **include path **
+Select the s3 path where the datasets for the use cases are located under **include path **
 
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(18).png)
 
-click **Next **
+Click **Next **
 
-click **Next**
+Click **Next**
 
-select **Create an IAM role**
+Select **Create an IAM role**
 
-enter a name for your Crawler IAM role and click  **Next**
+Enter a name for your Crawler IAM role and click  **Next**
 
-click **Next**
+Click **Next**
 
-click on **Add database**
+Click on **Add database**
 
-enter a **database name** and click **Create **
+Enter a **database name** and click **Create **
 
-click **Next** and then **Finish**
+Click **Next** and then **Finish**
 
-your AWS Glue crawler is now ready , click on the checkbox next to the crawler name and then click on **Run Crawler**
+Your AWS Glue crawler is now ready , click on the checkbox next to the crawler name and then click on **Run Crawler**
 
-the Glue crawler will run for approximately one mintue , and will discover the 3 datasets and create the tables in the glue catalog.
+The Glue crawler will run for approximately one mintue , and will discover the 3 datasets and create the tables in the glue catalog.
 
-if you go now to to **Tables** under **Databases** and the **Data  Catalog ,** you will see 3 tables that were created by the crawler you can click on each one of them and explore the schema ** **
+If you go now to to **Tables** under **Databases** and the **Data  Catalog ,** you will see 3 tables that were created by the crawler you can click on each one of them and explore the schema ** **
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(19).png)
 
-once that is done , we have products ready on the producer side that can be shared with the central/Hash account
+Once that is done , we have products ready on the producer side that can be shared with the central/Hash account
 
-go to the mash account .
+21. Go to the mash account .
 
-on the mesh account.
+On the mesh account, navigate to the folder `/environment/Data-mesh-util/test/reinvent` on the command line
 
-we would now run step 1_create_data_product.py ,  where we will copy the glue catalog to the central mesh account from the producer account.
+We would now run step 1_create_data_product.py , where we will copy the glue catalog to the central mesh account from the producer account.
 
-Navigate to the folder `/environment/Data-mesh-util/test/reinvent` on the command window.
+We need to tell our script what is the glue database_name  and what is the table_regex
 
-
-we need to tell our script what is the glue database_name  and what is the table_regex
-
-you can add those parameters to the Command line similarly to the below :
+You can add those parameters to the Command line similarly to the below :
 
 Run the following cli command
 
 `python 1_create_data_product.py --database_name <your database name> --table_regex usecase*`
 
-the script will start running and executing the relevant tasks.
+The script will start running and executing the relevant tasks.
 
-once done , you can go to the mesh account , and validate you a database and tables were created in the central catalog :
+Once done , you can go to the mesh account , and validate you a database and tables were created in the central catalog :
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(20).png)
 
-now that we have central catalog in place , we can run step 2 .
+Now that we have central catalog in place , we can run proceed to the next step.
 
-step 2 is where the consumer will request access to the data products in the catalog , he will do that by a subscription model
+22. In this step the consumer will request access to the data products in the catalog , he will do that by a subscription model
 
-asking for specific tables/databases and what type of premissions are required.
+Asking for specific tables/databases and what type of premissions are required.
 
-in the Cloud9 enviorment go to your termnial tab.
-
-if you try to run it , you will see it will ask for  - - database_name , - -tables ,  - - request_premissions
-
-now we can enter the relevant command , here is an example of how that should look like :
+In the Cloud9 enviorment go to your termnial tab. Make sure you are in the folder `/environment/Data-mesh-util/test/reinvent`
 
 in this example we gave only select premisions to the consumer.
 
@@ -368,44 +359,44 @@ Run the following command:
 
 `python 2_consumer_request_access.py --database_name <database from the central mesh account> --tables usecase* --request_permissions Select`
 
-the subscription will be stored in a dynamodb table.
+The subscription will be stored in a dynamodb table.
 
-you can now run  step 2_5_list_pending_access_requests.py using the following command:
+23. You can now run  step 2_5_list_pending_access_requests.py using the following command:
 
 `python 2_5_list_pending_access_requests.py`
 
-this will help us see exactly what the pending requests are for the central account to aprove and provide premissions .
+This will help us see exactly what the pending requests are for the central account to aprove and provide premissions .
 
-here is an example of the output of this step :
+Here is an example of the output of this step :
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(21).png)
 
-now , we are ready for step 3 , granting data product access.
+now , we are ready for the next step , granting data product access.
 
-for running the data prdouct access script you need to provide the following arguments are required: --subscription_id, —grant_permissions, —approval_notes.
+24. For running the data prdouct access script you need to provide the following arguments are required: --subscription_id, --grant_permissions, --approval_notes.
 
-the subscription id can be retrieved from the output of step 2_5_list_pending_access_requests , for grant premissions we will provide SELECT premissions .
+The subscription id can be retrieved from the output of step 2_5_list_pending_access_requests , for grant premissions we will provide SELECT premissions .
 
-please save the subscription id  , you will need to use it in step 4 as well .
+Please save the subscription id, you will need to use it in the next step as well .
 
-here is an example of how the command should look like (use the subscription id that was retrieved in the previous step :
+Run the following command (use the subscription id that was retrieved in the previous step) :
 
 `python 3_grant_data_product_access.py --subscription_id <your_subscription_id> --grant_permissions SELECT --approval_notes approved`
 
-once completed , the mesh account provided access to the consumer for the data products.
+Once completed , the mesh account provided access to the consumer for the data products.
 
-next we will run the final step which is step number 4 . in step 4 the consumer will approve the resource sharing.
+25. Next we will run the final step in which the consumer will approve the resource sharing.
 
-
-
-here is an example of how the command should look like :
+Run the following command (use the subscription id that was retrieved in the step before the previous one)
 
 `python 4_finalize_subscription_and_query.py --subscription_id <your subsciption_id>`
 
-you can now log in to the consumer account and verify that the database and tables are seen in lakeformation.
+You can now log in to the consumer account and verify that the database and tables are seen in lakeformation.
 
-you will see 2 databases , one is coming from the central mesh account , owned by the mesh account .
+You will see 2 databases , one is coming from the central mesh account , owned by the mesh account .
 
-the other one is a resource link created and owned by the consumer account .  this allows the AWS data analytics and ML services to acess the data .
+The other one is a resource link created and owned by the consumer account .  this allows the AWS data analytics and ML services to acess the data .
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(22).png)
+
+**Congratulations!! you have now setup the datamesh architecture across the Producer, Consumer and Central governance account. You are now ready to progress to the use cases section of the workshop. Follow the link below**
