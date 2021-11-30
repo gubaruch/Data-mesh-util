@@ -128,9 +128,8 @@ In general, you should start by configuring administrative users Mesh, ProducerA
 
 a. **Please make sure the region is updated to eu-west-1 on the sample_test_creds.json. Please see screenshot below**
 
-<img width="616" alt="Screenshot 2021-11-30 at 04 25 28" src="https://user-images.githubusercontent.com/81493814/144047069-54657497-714b-4a2c-9afe-7de222844288.png">
 
-
+<img width="943" alt="Screenshot 2021-11-30 at 07 53 55" src="https://user-images.githubusercontent.com/94520103/144081267-63a44adc-26bc-4159-b4f2-e4796d192113.png">
 
 Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure.
 
