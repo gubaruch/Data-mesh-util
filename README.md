@@ -40,12 +40,6 @@ Similarly, we have a consumer Account 999999999999. This Account also includes I
 
 All information around current or pending subscriptions is stored in DynamoDB, in table AwsDataMeshSubscriptions. This table is secured for only those operations which Producers or Consumer roles are allowed to execute, and stores the overall lifecycle for Subscriptions.
 
-under the home directory  \Data-mesh-util\test\reinvent you will find various tests that show the functionality of the Data Mesh Utility, including:
-
-- data\_mesh\_account\_tests.py: Tests which set up the central Data Mesh Account
-- producer\_account\_tests.py: Tests for the Producer side of data production creation and subscription access
-- consumer\_account\_tests.py: Tests for a Consumer to request access to a product and import subscription objects
-- integration.py: Full integration test showing configuration of the central mesh account, creation of a data product, request of access, and granting access for a consumer.
 
 
 ## Getting started with Event Engine
@@ -220,8 +214,22 @@ we would need to :
 
 go to the AWS producer account
 
-download the datasets from : https://github.com/gubaruch/Data-mesh-util/tree/mainline/workshop
-create an S3 bucket and upload the 3 datasets , you should have the following folder structure :
+in the search bar ,search for *cloudshell* and select it .
+
+once the shell is ready , create an s3 bucket by running the following command:
+
+`aws s3 mb --bucket_name`
+
+make sure you are creating a bucket fith a unique name like TLC303_<account_id)
+
+once done , we can download the datasets and the datasets directory strcuture into that s3 bucker which you have created.
+
+enter the following command:
+
+`aws s3 cp s3://tlc303datasets  s3://<your_bucket_name> --recursive`
+
+
+you should have the following folder structure :
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(17).png)
 
