@@ -230,11 +230,11 @@ enter the following command to download a compressed zip file which contains the
 
 then run : 
 
-'unzip tlc303datasets.zip'
+`unzip tlc303datasets.zip`
 
 then we can sync and copy the datasets to the s3 bucket we created :
 
-'s3 sync tlc303datasets s3://<enter-your-s3-bucket-name'
+`s3 sync tlc303datasets s3://<enter-your-s3-bucket-name`
 
 in the search bar look for *amazon s3* .
 
