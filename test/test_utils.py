@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../src/lib"))
 import data_mesh_util.lib.utils as utils
 from data_mesh_util.lib.constants import *
 
-def load_client_info_from_file(from_path: str = None):
+def load_client_info_from_file(from_path: str = "../sample-test-creds.json"):
     if from_path is None:
         use_path = os.getenv('CredentialsFile')
     else:
