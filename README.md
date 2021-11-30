@@ -126,7 +126,7 @@ This file allows for the configuration of multiple accounts, for the Data Mesh, 
 
 In general, you should start by configuring administrative users Mesh, ProducerAdmin, and ConsumerAdmin administrators. You can then setup the core Data Mesh functionality, and then add Producer and Consumer entries from the respective accounts after enabling Access Keys for the created DataMeshProducer and DataMeshConsumer sample users.
 
-**Please make sure the region is updated to eu-west-1 on the sample_test_creds.json. Please see screenshot below**
+a. **Please make sure the region is updated to eu-west-1 on the sample_test_creds.json. Please see screenshot below**
 
 <img width="616" alt="Screenshot 2021-11-30 at 04 25 28" src="https://user-images.githubusercontent.com/81493814/144047069-54657497-714b-4a2c-9afe-7de222844288.png">
 
