@@ -222,16 +222,29 @@ once the shell is ready , create an s3 bucket by running the following command:
 
 make sure you are creating a bucket fith a unique name like TLC303_<account_id)
 
-once done , we can download the datasets and the datasets directory strcuture into that s3 bucker which you have created.
+once done , we can download the datasets and the datasets directory strcuture into that s3 bucket which you have created.
 
-enter the following command:
+enter the following command to download a compressed zip file which contains the different datasets :
 
-`aws s3 cp s3://tlc303datasets  s3://<your_bucket_name> --recursive`
+`wget https://d29eh26mh9ajut.cloudfront.net/tlc303datasets.zip`
+
+then run : 
+
+'unzip tlc303datasets.zip'
+
+then we can sync and copy the datasets to the s3 bucket we created :
+
+'s3 sync tlc303datasets s3://<enter-your-s3-bucket-name'
+
+in the search bar look for *amazon s3* .
+
+in the s3 console find the bucket you had just created .
+
+verify that directory structure looks as per the below :
+
+![](https://github.com/gubaruch/Data-mesh-util/blob/mainline/doc/image25.PNG)
 
 
-you should have the following folder structure :
-
-![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(17).png)
 
 run the AWS Glue crawler to discover the schemas and build a glue catalog:
 
