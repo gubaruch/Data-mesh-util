@@ -296,7 +296,11 @@ Enter a **database name** and click **Create **
 
 Click **Next** and then **Finish**
 
-Your AWS Glue crawler is now ready , click on the checkbox next to the crawler name and then click on **Run Crawler**
+Provide the glue crawler permissions to create, alter and describe the glue database.
+
+Go to **Lake Formation**, Click on Data lake permissions on the left hand panel, click on grant, choose the glue crawler IAM role in the IAM users and roles field, choose the Named data catalog resources radio button, in the databases field choose the database you created above, in the Database permissions select create, alter and describe, and finally click Grant.
+
+Now back on the **AWS Glue** console, click on the checkbox next to the crawler name and then click on **Run Crawler**
 
 The Glue crawler will run for approximately one mintue , and will discover the 3 datasets and create the tables in the glue catalog.
 
