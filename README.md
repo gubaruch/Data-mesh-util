@@ -120,18 +120,17 @@ This command will donwload the source code to your cloud9 environment.
 
 14. That will install the relevant packages required to run the data mesh util.
 
-15. Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. this file is located in the following path :/Data-mesh-util/test/sample-test-creds.json
+15. Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. This file is located in the following path :/Data-mesh-util/test/sample-test-creds.json
 
-This file allows for the configuration of multiple accounts, for the Data Mesh, and then a &quot;normal&quot; user and Administration user for both the producer and consumer. Please note that the keys of this document are reserved and cannot be changed or extended (Mesh, Producer, ProducerAdmin, Consumer, and ConsumerAdmin are all reserved words).
+This file allows for the configuration of multiple accounts for the Data Mesh. Please note that the keys of this document are reserved and cannot be changed or extended (Mesh, Producer, ProducerAdmin, Consumer, and ConsumerAdmin are all reserved words).
 
-In general, you should start by configuring administrative users Mesh, ProducerAdmin, and ConsumerAdmin administrators. You can then setup the core Data Mesh functionality, and then add Producer and Consumer entries from the respective accounts after enabling Access Keys for the created DataMeshProducer and DataMeshConsumer sample users.
+16. Create administrative users Mesh, ProducerAdmin, and ConsumerAdmin in the Mesh, Producer and Consumer accounts respectively. The access key and secret access keys of these users must be updated in the sample-test-creds.json file against their respective sections (Mesh, ProducerAdmin, and ConsumerAdmin).
 
-a. **Please make sure the region is updated to eu-west-1 on the sample_test_creds.json. Please see screenshot below**
+Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure. 
 
+The below steps show the creation of the user and assignment as data lake admin for one account. This must be repeated for all three accounts.
 
-<img width="943" alt="Screenshot 2021-11-30 at 07 53 55" src="https://user-images.githubusercontent.com/94520103/144081267-63a44adc-26bc-4159-b4f2-e4796d192113.png">
-
-Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure.
+a. **Please make sure the region is updated to us-east-1 on the sample_test_creds.json. Please see screenshot below**
 
 
 b. Each user in his AWS account , will create an IAM user and will provide the relevant details , which will be populated in the datamesh account.
