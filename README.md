@@ -130,21 +130,18 @@ Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Dat
 
 The below steps show the creation of the user and assignment as data lake admin for one account. This must be repeated for all three accounts.
 
-a. **Please make sure the region is updated to us-east-1 on the sample_test_creds.json. Please see screenshot below**
+a. Please make sure the region is updated to us-east-1 on the sample_test_creds.json.
 
 
-b. Each user in his AWS account , will create an IAM user and will provide the relevant details , which will be populated in the datamesh account.
+**Create an IAM user:**
 
-c. Log in to your AWS console
+b. Log in to your AWS console
 
+c. Search for IAM , in the search bar and select IAM.
 
-d. Search for IAM , in the search bar and select IAM.
+d. Select **Users** and then **add users **
 
-e. We will now create the users which are needed for the data mesh util.
-
-f. Select **Users** and then **add users **
-
-g. Enter a user name, and try to make it identifiable - Producer for the producer account , Consumer for the consumer account,Central/Mesh for central account
+e. Enter a user name, and try to make it identifiable - Mesh for central account, ProducerAdmin for the producer account , ConsumerAdmin for the consumer account
 
 h. Under select AWS access type , select  **Access key - Programmatic access** and click **next:permissions**
 
@@ -165,16 +162,13 @@ m. Please save those in a notepad , and share those with the mesh account owner 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(13).png)
 
 
+**Make the user created a data lake admin**
 
-16. Now go to the search bar and search for **Lakeformation**.
+n. Now go to the search bar and search for **Lakeformation**. Choose **add me first** .
 
-We will now provide datalake admin rights to the user we have just created .
+o. Click on the left side under Premissions on **Administrative roles and tasks** then click on **Choose administrators.**
 
-choose **add me first** .
-
-Click on the left side under Premissions on **Administrative roles and tasks** then click on **Choose administrators.**
-
-Select the relevant user which you have created and click **Save**
+p. Select the relevant user which you have created and click **Save**
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(14).png)
 
@@ -185,17 +179,17 @@ Once done you should see that the IAM user now is a Data lake administrator:
 
 17. On the mesh account , in cloud9 , open the  **/Data-mesh-util/test/sample-test-creds.json** file
 
-The Mesh, Producer Admin and Consumer Admin sections are the ones which should be populated .
+The Mesh, ProducerAdmin and ConsumerAdmin sections are the ones which should be populated.
 
-once those are populated . we can start running the steps .
+Once those are populated, We can start running the steps.
 
-the first step is to run 0_setup_central_account.py.
+The first step is to run 0_setup_central_account.py.
 
-go to your termnial window.
+Go to your termnial window.
 
-make sure you are in the right path : `~/environment/Data-mesh-util/test/reinvent`
+Make sure you are in the right path : `~/environment/Data-mesh-util/test/reinvent`
 
-once ready, enter the following :
+Once ready, enter the following :
 
 `python 0_setup_central_account.py` and run it .
 
