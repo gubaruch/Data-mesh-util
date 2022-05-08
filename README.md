@@ -232,7 +232,7 @@ Once the shell is ready , create an s3 bucket by running the following command:
 
 `aws s3 mb s3://<your_unique_bucket_name>`
 
-Make sure you are creating a bucket fith a unique name like TLC303<account_id)
+Make sure you are creating a bucket fith a unique name for example - lla-<your aws account id>
 
 Once done , we can download the datasets and the datasets directory strcuture into that s3 bucket which you have created.
 
