@@ -120,32 +120,28 @@ This command will donwload the source code to your cloud9 environment.
 
 14. That will install the relevant packages required to run the data mesh util.
 
-15. Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. this file is located in the following path :/Data-mesh-util/test/sample-test-creds.json
+15. Each step requires the configuration of a CredentialsFile environment variable, which is a JSON document on your filesystem that provides access to the Accounts to be used. This file is located in the following path :/Data-mesh-util/test/sample-test-creds.json
 
-This file allows for the configuration of multiple accounts, for the Data Mesh, and then a &quot;normal&quot; user and Administration user for both the producer and consumer. Please note that the keys of this document are reserved and cannot be changed or extended (Mesh, Producer, ProducerAdmin, Consumer, and ConsumerAdmin are all reserved words).
+This file allows for the configuration of multiple accounts for the Data Mesh. Please note that the keys of this document are reserved and cannot be changed or extended (Mesh, Producer, ProducerAdmin, Consumer, and ConsumerAdmin are all reserved words).
 
-In general, you should start by configuring administrative users Mesh, ProducerAdmin, and ConsumerAdmin administrators. You can then setup the core Data Mesh functionality, and then add Producer and Consumer entries from the respective accounts after enabling Access Keys for the created DataMeshProducer and DataMeshConsumer sample users.
+16. Create administrative users Mesh, ProducerAdmin, and ConsumerAdmin in the Mesh, Producer and Consumer accounts respectively. The access key and secret access keys of these users must be updated in the sample-test-creds.json file against their respective sections (Mesh, ProducerAdmin, and ConsumerAdmin).
 
-a. **Please make sure the region is updated to eu-west-1 on the sample_test_creds.json. Please see screenshot below**
+Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure. 
 
+The below steps show the creation of the user and assignment as data lake admin for one account. This must be repeated for all three accounts.
 
-<img width="943" alt="Screenshot 2021-11-30 at 07 53 55" src="https://user-images.githubusercontent.com/94520103/144081267-63a44adc-26bc-4159-b4f2-e4796d192113.png">
-
-Please note that Mesh, ProducerAdmin, and ConsumerAdmin must all be assigned Data Lake Admin permissions in Lake Formation. This permissions Grant falls out of the scope of this utility as it requires root or Data Lake Admin to assign. You can assign these permissions using the AWS Console in the Account you wish to configure.
-
-
-b. Each user in his AWS account , will create an IAM user and will provide the relevant details , which will be populated in the datamesh account.
-
-c. Log in to your AWS console
+a. Please make sure the region is updated to us-east-1 on the sample_test_creds.json.
 
 
-d. Search for IAM , in the search bar and select IAM.
+**Create an IAM user:**
 
-e. We will now create the users which are needed for the data mesh util.
+b. Log in to your AWS console
 
-f. Select **Users** and then **add users **
+c. Search for IAM , in the search bar and select IAM.
 
-g. Enter a user name, and try to make it identifiable - Producer for the producer account , Consumer for the consumer account,Central/Mesh for central account
+d. Select **Users** and then **add users **
+
+e. Enter a user name, and try to make it identifiable - Mesh for central account, ProducerAdmin for the producer account , ConsumerAdmin for the consumer account
 
 h. Under select AWS access type , select  **Access key - Programmatic access** and click **next:permissions**
 
@@ -166,16 +162,13 @@ m. Please save those in a notepad , and share those with the mesh account owner 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(13).png)
 
 
+**Make the user created a data lake admin**
 
-16. Now go to the search bar and search for **Lakeformation**.
+n. Now go to the search bar and search for **Lakeformation**. Choose **add me first** .
 
-We will now provide datalake admin rights to the user we have just created .
+o. Click on the left side under Premissions on **Administrative roles and tasks** then click on **Choose administrators.**
 
-choose **add me first** .
-
-Click on the left side under Premissions on **Administrative roles and tasks** then click on **Choose administrators.**
-
-Select the relevant user which you have created and click **Save**
+p. Select the relevant user which you have created and click **Save**
 
 ![](https://github.com/gubaruch/TLC303_reinvent2021/blob/main/doc/image(14).png)
 
@@ -186,17 +179,17 @@ Once done you should see that the IAM user now is a Data lake administrator:
 
 17. On the mesh account , in cloud9 , open the  **/Data-mesh-util/test/sample-test-creds.json** file
 
-The Mesh, Producer Admin and Consumer Admin sections are the ones which should be populated .
+The Mesh, ProducerAdmin and ConsumerAdmin sections are the ones which should be populated.
 
-once those are populated . we can start running the steps .
+Once those are populated, We can start running the steps.
 
-the first step is to run 0_setup_central_account.py.
+The first step is to run 0_setup_central_account.py.
 
-go to your termnial window.
+Go to your termnial window.
 
-make sure you are in the right path : `~/environment/Data-mesh-util/test/reinvent`
+Make sure you are in the right path : `~/environment/Data-mesh-util/test/reinvent`
 
-once ready, enter the following :
+Once ready, enter the following :
 
 `python 0_setup_central_account.py` and run it .
 
@@ -239,7 +232,7 @@ Once the shell is ready , create an s3 bucket by running the following command:
 
 `aws s3 mb s3://<your_unique_bucket_name>`
 
-Make sure you are creating a bucket fith a unique name like TLC303<account_id)
+Make sure you are creating a bucket fith a unique name.
 
 Once done , we can download the datasets and the datasets directory strcuture into that s3 bucket which you have created.
 
@@ -303,7 +296,11 @@ Enter a **database name** and click **Create **
 
 Click **Next** and then **Finish**
 
-Your AWS Glue crawler is now ready , click on the checkbox next to the crawler name and then click on **Run Crawler**
+Provide the glue crawler permissions to create, alter and describe the glue database.
+
+Go to **Lake Formation**, Click on Data lake permissions on the left hand panel, click on grant, choose the glue crawler IAM role in the IAM users and roles field, choose the Named data catalog resources radio button, in the databases field choose the database you created above, in the Database permissions select create, alter and describe, and finally click Grant.
+
+Now back on the **AWS Glue** console, click on the checkbox next to the crawler name and then click on **Run Crawler**
 
 The Glue crawler will run for approximately one mintue , and will discover the 3 datasets and create the tables in the glue catalog.
 
